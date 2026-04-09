@@ -31,7 +31,7 @@ Derive the branch name from the Jira requirements:
 - Must start with the Jira ID
 
 Derive the short description from the Jira summary (2–4 words max):
-- "Create a GET API endpoint to parse country name and return the capital" → `proj-1-get-country-capital-api`
+- "Create a GET API endpoint to return user profile by ID" → `proj-1-get-user-profile-api`
 - "Add user authentication with JWT" → `proj-42-user-jwt-auth`
 - "Fix null pointer in order service" → `proj-99-fix-order-null`
 

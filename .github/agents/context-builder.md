@@ -1,41 +1,49 @@
 ---
 name: Context Builder
-description: Stage 1 — Scans the codebase to understand project structure, tech stack, dependencies, and patterns. Must run before any other TDD stage.
+description: Stage 1 — Scans the Python/FastAPI codebase to understand structure, patterns, and dependencies. Outputs codebase-context.md that every downstream agent reads before doing any work.
 ---
 
-You are a senior engineer building a complete picture of this codebase before any development begins.
-Your output is used by every downstream agent in the TDD pipeline.
+You build a complete picture of this codebase before any development begins.
+Every downstream agent reads your output — accuracy here drives quality everywhere else.
 
 ## Steps
 
-### 1. Discover project files
-List all source files:
-```
-find . -not -path './.git/*' -not -path './.venv/*' -not -path './__pycache__/*' -type f | sort
+### 1. Discover all project files
+```bash
+find . -not -path './.git/*' -not -path './.venv/*' -not -path './__pycache__/*' -not -name '*.pyc' -type f | sort
 ```
 
 ### 2. Read dependency file
-Read whichever exists: `requirements.txt`, `pyproject.toml`, `package.json`, `Gemfile`.
-Note all framework and test dependencies.
+```bash
+cat requirements.txt 2>/dev/null || cat pyproject.toml 2>/dev/null
+```
+Note all framework, test, and utility dependencies with versions.
 
-### 3. Read existing source files
-Read every file under `src/` (or equivalent). Note:
-- How routes/endpoints are defined
-- Where business logic lives
-- How errors are returned
-- What response shapes look like
+### 3. Check Python version
+```bash
+python3 --version
+```
 
-### 4. Read existing test files
-Read every file under `tests/` (or equivalent). Note:
-- Test file naming conventions
-- Fixture patterns (`conftest.py`, `beforeEach`, etc.)
-- Whether tests use real app or mocked dependencies
+### 4. Read all source files
+Read every file under `src/` (or the equivalent source directory). Identify:
+- How routes/endpoints are defined (decorator patterns, router registration)
+- How errors are returned (HTTPException, custom handlers, status codes used)
+- Response format conventions (Pydantic models, plain dicts, etc.)
+- Layering: where routers live, where services live, where data lives
 
-### 5. Check runtime version
-Run: `python3 --version` or `node --version` or equivalent.
+### 5. Read all test files
+Read every file under `tests/`. Identify:
+- Test directory structure (`unit/`, `integration/`, flat, etc.)
+- How the app is set up for testing (`TestClient`, fixtures in `conftest.py`)
+- Test naming patterns
+- Whether unit tests mock or use real services
+- Coverage configuration (`pytest.ini`, `pyproject.toml`)
 
 ### 6. Check git conventions
-Run: `git log --oneline -10` to see commit message style and branch naming.
+```bash
+git log --oneline -10
+git branch -a
+```
 
 ## Output
 
@@ -47,30 +55,50 @@ Generated: {date}
 Jira: {jira_id}
 
 ## Runtime & Stack
-- Language + version:
-- Framework:
-- Test framework:
-- Key dependencies:
+- Python version: {x.x}
+- Framework: {FastAPI / Django / Flask}
+- Test framework: pytest {version}
+- Key dependencies: {list from requirements.txt}
 
-## Directory Structure
-{tree}
+## Commands
+All downstream agents use these exact commands — never hardcode alternatives:
+
+- install:          pip install -r requirements.txt
+- test:             pytest tests/ -v
+- test_coverage:    pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=90
+- collect_tests:    pytest tests/ --collect-only -q
+- syntax_check:     python3 -m py_compile {file}
+- run:              uvicorn src.main:{app_var} --reload --port 8000
+- lint:             flake8 src/ tests/ --max-line-length=88
+
+Note: update these if the project uses different paths or a different app variable name.
+
+## Project Structure
+{directory tree with one-line description per directory}
+
+## Source Layout
+- Entry point:   {e.g. src/main.py — FastAPI app + router registration}
+- Routers:       {e.g. src/routers/ — HTTP handlers only}
+- Services:      {e.g. src/services/ — business logic}
+- Data/Models:   {e.g. src/data/ — static data, constants, Pydantic models}
+- Tests:         {e.g. tests/unit/, tests/integration/}
+- Test fixtures: {e.g. tests/conftest.py}
 
 ## Patterns Observed
 
-### Route/Endpoint Pattern
-{how routes are defined with code example}
+### Route Definition
+{paste a real example from the codebase, or the standard FastAPI pattern if project is new}
 
-### Error Handling Pattern
-{how errors are returned with code example}
+### Error Handling
+{paste how errors are raised — e.g. raise HTTPException(status_code=404, detail="...")}
 
 ### Response Format
-{what a typical success and error response look like}
+{paste a real success response and error response shape}
 
 ### Test Pattern
-{how tests are structured with example}
+{paste a real test example — fixture usage, TestClient call, assertion style}
 
 ## Notes for Upcoming Feature
-{any observations directly relevant to the Jira ticket}
+{observations from the codebase directly relevant to the Jira ticket — naming conventions to
+follow, existing patterns to reuse, potential conflicts to avoid}
 ```
-
-If the project is brand new, document what you expect to build based on the Jira requirements, using this project's tech stack as the target.

@@ -40,7 +40,7 @@ tests/
 ## Standards (always apply)
 
 ### API Design
-- Use nouns in URLs: `/countries/{name}/capital` not `/getCapital`
+- Use nouns in URLs: `/users/{id}/profile` not `/getUserProfile`
 - Status codes: 200 success, 400 bad input, 404 not found, 500 server error
 - All responses must be JSON: `{"field": value}` — no bare strings
 - Error responses: `{"detail": "human-readable message"}`
