@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       jira_id:
-        description: 'Jira ticket ID'
+        description: 'Jira ticket ID (e.g. PROJ-1)'
         required: true
         type: string
       api_base_url:
-        description: 'Deployed API base URL (e.g. https://api.example.com)'
+        description: 'Deployed API base URL (e.g. https://api.example.com or http://localhost:8000)'
         required: true
         type: string
 
@@ -21,37 +21,102 @@ jobs:
         with:
           ref: develop
 
+      # ── Health Check ──────────────────────────────────
       - name: Health check
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ github.event.inputs.api_base_url }}/health)
+          BASE_URL="${{ github.event.inputs.api_base_url }}"
+          echo "Testing: $BASE_URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/health")
           if [ "$STATUS" != "200" ]; then
-            echo "Health check FAILED — status: $STATUS"
+            echo "FAIL: Health check returned $STATUS — API not reachable"
             exit 1
           fi
-          echo "Health check PASSED"
+          echo "PASS: Health check 200"
 
-      - name: Run e2e-validator agent
-        uses: anthropics/claude-code-action@beta
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          agent: e2e-validator
-          prompt: |
-            Run full E2E validation for ${{ github.event.inputs.jira_id }}.
-            API_BASE_URL: ${{ github.event.inputs.api_base_url }}
-            Validate all requirements from jira-requirements.md are met.
-
-      - name: Upload E2E report
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-report
-          path: .github/context/e2e-report.md
-
-      - name: Check E2E result
+      # ── Happy Path Tests ─────────────────────────────
+      - name: Test valid countries
         run: |
-          if grep -q "REQUIREMENTS NOT MET" .github/context/e2e-report.md; then
-            echo "E2E FAILED — requirements not met"
-            cat .github/context/e2e-report.md
+          BASE_URL="${{ github.event.inputs.api_base_url }}"
+          FAILED=0
+
+          check() {
+            local LABEL=$1
+            local URL=$2
+            local EXPECTED_STATUS=$3
+            local EXPECTED_BODY=$4
+
+            RESPONSE=$(curl -s -w "\n%{http_code}" "$URL")
+            STATUS=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -1)
+
+            if [ "$STATUS" != "$EXPECTED_STATUS" ]; then
+              echo "FAIL [$LABEL]: expected $EXPECTED_STATUS got $STATUS — $BODY"
+              FAILED=1
+            elif [ -n "$EXPECTED_BODY" ] && ! echo "$BODY" | grep -q "$EXPECTED_BODY"; then
+              echo "FAIL [$LABEL]: expected body to contain '$EXPECTED_BODY' — got $BODY"
+              FAILED=1
+            else
+              echo "PASS [$LABEL]: $STATUS $BODY"
+            fi
+          }
+
+          # AC2: Valid countries return 200 + correct capital
+          check "France"         "$BASE_URL/countries/France/capital"          "200" "Paris"
+          check "Japan"          "$BASE_URL/countries/Japan/capital"           "200" "Tokyo"
+          check "Germany"        "$BASE_URL/countries/Germany/capital"         "200" "Berlin"
+          check "United States"  "$BASE_URL/countries/United%20States/capital" "200" "Washington"
+          check "United Kingdom" "$BASE_URL/countries/United%20Kingdom/capital" "200" "London"
+
+          # AC5: Case insensitive
+          check "france (lower)"  "$BASE_URL/countries/france/capital"  "200" "Paris"
+          check "FRANCE (upper)"  "$BASE_URL/countries/FRANCE/capital"  "200" "Paris"
+          check "fRaNcE (mixed)"  "$BASE_URL/countries/fRaNcE/capital"  "200" "Paris"
+
+          # AC3: Unknown country → 404
+          check "Wakanda (404)"   "$BASE_URL/countries/Wakanda/capital"  "404" "detail"
+          check "Neverland (404)" "$BASE_URL/countries/Neverland/capital" "404" "detail"
+
+          # AC4: Invalid input → 400
+          check "123 (400)"     "$BASE_URL/countries/123/capital"    "400" "detail"
+          check "space (400)"   "$BASE_URL/countries/%20/capital"    "400" "detail"
+
+          # AC8: Health check
+          check "health"        "$BASE_URL/health"                   "200" "healthy"
+
+          exit $FAILED
+
+      # ── Response Headers ─────────────────────────────
+      - name: Validate Content-Type header
+        run: |
+          BASE_URL="${{ github.event.inputs.api_base_url }}"
+          CT=$(curl -sI "$BASE_URL/countries/France/capital" | grep -i content-type)
+          echo "Content-Type: $CT"
+          if echo "$CT" | grep -q "application/json"; then
+            echo "PASS: Content-Type is application/json"
+          else
+            echo "FAIL: Content-Type is not application/json"
             exit 1
           fi
-          echo "E2E PASSED — all requirements validated"
-          cat .github/context/e2e-report.md
+
+      # ── Performance Test ─────────────────────────────
+      - name: Response time < 500ms
+        run: |
+          BASE_URL="${{ github.event.inputs.api_base_url }}"
+          TIME=$(curl -s -o /dev/null -w "%{time_total}" "$BASE_URL/countries/France/capital")
+          echo "Response time: ${TIME}s"
+          # Check if time > 0.5 using awk
+          if awk "BEGIN{exit !($TIME > 0.5)}"; then
+            echo "WARN: Response time ${TIME}s exceeds 500ms target"
+          else
+            echo "PASS: Response time ${TIME}s is within 500ms target"
+          fi
+
+      # ── Summary ──────────────────────────────────────
+      - name: E2E Summary
+        if: always()
+        run: |
+          echo "================================="
+          echo "E2E Validation — ${{ github.event.inputs.jira_id }}"
+          echo "API: ${{ github.event.inputs.api_base_url }}"
+          echo "================================="
+          echo "Run the e2e-validator Copilot agent for a detailed report."

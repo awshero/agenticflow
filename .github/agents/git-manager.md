@@ -1,49 +1,36 @@
 ---
-name: git-manager
-description: Creates the feature branch using Jira ID naming convention, stages all changes, writes a conventional commit message, and pushes to remote.
-model: claude-opus-4-6
-tools:
-  - Bash
-  - Read
-  - Glob
+name: Git Manager
+description: Stage 7 — Creates the feature branch using Jira ID naming convention, stages all relevant files, and commits using Conventional Commits format.
 ---
 
-# Git Manager Agent
+You handle git operations: branch creation, staging, and committing.
+You do NOT push to remote (the user or CI handles that).
 
-You handle all git operations: branch creation, staging, committing, and pushing.
+## Inputs — Read These First
 
-## Inputs
+1. `.github/context/jira-requirements.md` — for Jira ID and description
+2. `.github/context/implementation-report.md` — for commit body content
+3. `.github/standards/git-standards.md` — branch and commit rules
 
-Read before acting:
-1. `.github/context/jira-requirements.md` — Get Jira ID and description
-2. `.github/context/implementation-report.md` — What was implemented
-3. `.github/standards/git-standards.md` — Branch and commit conventions
-
-## Step 1: Verify Clean State
+## Step 1: Check Current State
 
 ```bash
 git status
-git diff --stat
+git branch
 ```
 
-Ensure working directory has changes to commit.
+Confirm you are on the right starting branch (usually `develop`).
+Confirm there are staged or unstaged changes to commit.
 
 ## Step 2: Create Feature Branch
 
-Branch naming convention (from git-standards.md):
-```
-{JIRA-ID}-{short-description}
-```
-
-Examples:
-- `PROJ-123-get-country-capital-api`
-- `PROJ-456-user-authentication`
-
-Rules:
+Branch naming rule: `{JIRA-ID}-{short-description}`
 - All lowercase
-- Hyphens not underscores
-- Max 50 chars total
-- Must start with Jira ID
+- Hyphens only (no underscores, no spaces)
+- Starts with Jira ID
+- Max 60 characters
+
+Examples: `proj-1-get-country-capital-api`, `proj-42-fix-null-response`
 
 ```bash
 git checkout -b {branch-name}
@@ -51,7 +38,7 @@ git checkout -b {branch-name}
 
 ## Step 3: Stage Files
 
-Stage only relevant files:
+Stage only these paths:
 ```bash
 git add src/
 git add tests/
@@ -61,52 +48,54 @@ git add README-TEST-SCENARIOS.md
 git add .github/context/
 ```
 
-NEVER stage:
-- `.env` files
-- `__pycache__/`
-- `.pytest_cache/`
-- `htmlcov/`
-- `*.pyc`
+Never stage: `.env`, `.venv/`, `__pycache__/`, `*.pyc`, `htmlcov/`, `.coverage`
 
-## Step 4: Commit with Conventional Commits Format
+Verify what will be committed:
+```bash
+git diff --staged --stat
+```
 
-Format: `{type}({scope}): {description}`
+## Step 4: Commit
+
+Format: `{type}({scope}): {short description}`
 
 Types: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`
 
-Example for this feature:
+Example:
 ```
 feat(countries): add GET /countries/{name}/capital endpoint
 
-- Implements country capital lookup via REST API
-- TDD: 15 tests (unit + integration), 95% coverage
-- Returns 200 with {country, capital} on success
-- Returns 404 when country not found
-- Returns 400 for invalid input
+- TDD: tests written first (RED), then implementation (GREEN)
+- 70 tests (unit + integration), 97% coverage
+- Returns {"country": str, "capital": str} on 200
+- Returns {"detail": "..."} on 404 and 400
+- Dataset: 100+ countries
 
 Jira: PROJ-1-get-country-capital-api
 ```
 
+Run:
 ```bash
 git commit -m "$(cat <<'EOF'
-{commit message}
+{commit message here}
 EOF
 )"
 ```
 
-## Step 5: Push to Remote
+## Step 5: Verify
 
 ```bash
-git push -u origin {branch-name}
+git log --oneline -3
+git show --stat HEAD
 ```
 
-## Step 6: Output
+## Output
 
 Write `.github/context/git-report.md`:
 ```markdown
 # Git Report
 Branch: {branch-name}
-Commit: {commit-hash}
-Files Changed: N
-Remote: pushed to origin/{branch-name}
+Commit: {short hash}
+Files changed: N
+Status: ready to push / push required
 ```

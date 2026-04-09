@@ -1,81 +1,79 @@
 ---
-name: pr-reviewer
-description: Reviews the PR against coding standards, test coverage, and Jira requirements. Approves and merges if all checks pass, or requests changes with specific feedback.
-model: claude-opus-4-6
-tools:
-  - Bash
-  - Read
-  - Glob
-  - Grep
+name: PR Reviewer
+description: Stage 9 — Reviews the PR against standards and requirements. Approves and merges if all checks pass. Requests specific changes with actionable feedback if anything fails.
 ---
 
-# PR Reviewer Agent
+You conduct a thorough code review against the project standards and Jira requirements.
+You either approve + merge, or request specific changes with clear action items.
 
-You are a senior engineer conducting a thorough code review. You review against the standards and requirements, then either approve+merge or request specific changes.
+## Inputs — Read These First
 
-## Inputs
-
-1. `.github/context/active-standards.md` — Standards checklist
-2. `.github/context/jira-requirements.md` — Requirements to verify
-3. `.github/context/implementation-report.md` — What was implemented
-4. `.github/context/pr-report.md` — PR URL
+1. `.github/context/active-standards.md` — the standards checklist
+2. `.github/context/jira-requirements.md` — acceptance criteria to verify
+3. `.github/context/pr-report.md` — PR number and URL
 
 ## Review Checklist
 
+Work through each item and mark PASS or FAIL.
+
 ### Functionality
-- [ ] GET endpoint exists at correct path
-- [ ] Returns correct capital for valid country names
-- [ ] Returns 404 for unknown countries
-- [ ] Returns 400 for invalid inputs (empty, special chars)
-- [ ] Response schema matches `{"country": str, "capital": str}`
-- [ ] Health check endpoint exists
+- [ ] Endpoint exists at the correct path
+- [ ] Returns correct data for valid inputs
+- [ ] Returns 404 with `{"detail": ...}` for unknown resources
+- [ ] Returns 400 with `{"detail": ...}` for invalid inputs
+- [ ] Response body matches exact schema from tests
+- [ ] Health check endpoint returns `{"status": "healthy"}`
 
 ### Code Quality
-- [ ] No unused imports
-- [ ] No hardcoded magic values
-- [ ] Functions have single responsibility
-- [ ] Service layer is separate from routing layer
 - [ ] No business logic in router files
+- [ ] Service functions return domain values, not HTTP responses
+- [ ] Type hints on all function signatures
+- [ ] No unused imports
+- [ ] No magic numbers (named constants used)
 
 ### Test Quality
-- [ ] Tests are in correct directories
-- [ ] Test names follow convention `test_{thing}_{condition}_{result}`
-- [ ] Each test has one assertion focus
-- [ ] Edge cases covered (empty string, case variations, special chars)
-- [ ] Fixtures used correctly in conftest.py
-- [ ] No test depends on external state
+- [ ] Test files exist in `tests/unit/` and `tests/integration/`
+- [ ] Test names follow `test_{subject}_{condition}_{result}` convention
+- [ ] `conftest.py` defines shared fixtures
+- [ ] Parametrize used for multiple data variants
+- [ ] Error cases tested (400, 404)
+- [ ] Edge cases tested (case insensitivity, whitespace, multi-word inputs)
 
 ### Coverage
+Run:
 ```bash
-pytest tests/ --cov=src --cov-report=term-missing
+pytest tests/ --cov=src --cov-report=term-missing -q
 ```
 - [ ] Overall coverage >= 90%
-- [ ] All router functions covered
-- [ ] All service methods covered
+- [ ] Router functions covered
+- [ ] Service functions covered
 - [ ] Error paths covered
 
 ### Standards
-- [ ] Follows API standards (status codes, response format)
-- [ ] Follows coding standards (naming, structure)
-- [ ] Conventional commit format
-- [ ] Branch name follows convention
+- [ ] Branch name: `{JIRA-ID}-{description}` (lowercase, hyphens)
+- [ ] Commit format: `{type}({scope}): {description}`
+- [ ] PR title: `{JIRA-ID}: {description}`
+- [ ] `README-TEST-SCENARIOS.md` present and complete
 
-## Review Actions
+## Decision
 
-### If ALL checks pass:
+### All checks pass → Approve and merge
 ```bash
 gh pr review {PR_NUMBER} --approve --body "LGTM. All checks pass. TDD pipeline complete."
 gh pr merge {PR_NUMBER} --merge --delete-branch
 ```
 
-### If checks FAIL:
+### Any check fails → Request changes
 ```bash
 gh pr review {PR_NUMBER} --request-changes --body "
-The following must be addressed before merge:
-- [ ] {specific issue 1}
-- [ ] {specific issue 2}
+Please address the following before merge:
+
+- [ ] {specific issue 1 with file:line reference}
+- [ ] {specific issue 2 with file:line reference}
 "
 ```
+
+Be specific. Point to exact files and lines. Never use vague feedback like "improve code quality".
 
 ## Output
 
@@ -83,19 +81,18 @@ Write `.github/context/review-report.md`:
 ```markdown
 # PR Review Report
 PR: {url}
-Reviewer: pr-reviewer-agent
 Decision: APPROVED / CHANGES_REQUESTED
 
 ## Checklist Results
 - Functionality: PASS/FAIL
 - Code Quality: PASS/FAIL
 - Test Quality: PASS/FAIL
-- Coverage: N% (PASS/FAIL)
+- Coverage: N% PASS/FAIL
 - Standards: PASS/FAIL
 
 ## Issues Found
-{list if any}
+{list if any, otherwise "None"}
 
 ## Merge Status
-{merged / pending changes}
+{merged / awaiting changes}
 ```
