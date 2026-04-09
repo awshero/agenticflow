@@ -1,0 +1,232 @@
+name: TDD Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      jira_id:
+        description: 'Jira ticket ID (e.g. PROJ-1)'
+        required: true
+        type: string
+      jira_summary:
+        description: 'Jira ticket summary'
+        required: true
+        type: string
+      skip_to_stage:
+        description: 'Resume from stage (1-10, default: 1)'
+        required: false
+        default: '1'
+        type: string
+
+  push:
+    branches:
+      - 'PROJ-*'
+
+jobs:
+  context-build:
+    name: "Stage 1 — Build Codebase Context"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_to_stage <= '1' || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run context-builder agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: context-builder
+          prompt: |
+            Build codebase context for Jira ticket ${{ github.event.inputs.jira_id }}.
+            Summary: ${{ github.event.inputs.jira_summary }}
+            Output to .github/context/codebase-context.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: context
+          path: .github/context/
+
+  standards-load:
+    name: "Stage 2 — Load Standards"
+    runs-on: ubuntu-latest
+    needs: context-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: context, path: .github/context/ }
+      - name: Run standards-loader agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: standards-loader
+          prompt: "Load and compile standards for ${{ github.event.inputs.jira_id }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: context
+          path: .github/context/
+
+  generate-tests:
+    name: "Stage 3 — Generate Tests (RED Phase)"
+    runs-on: ubuntu-latest
+    needs: standards-load
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: context, path: .github/context/ }
+      - name: Run test-generator agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: test-generator
+          prompt: |
+            Generate comprehensive test suite for ${{ github.event.inputs.jira_id }}.
+            Requirement: ${{ github.event.inputs.jira_summary }}
+            Write tests FIRST before any implementation.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tests
+          path: tests/
+
+  validate-tests:
+    name: "Stage 4 — Validate Tests"
+    runs-on: ubuntu-latest
+    needs: generate-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: tests, path: tests/ }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - name: Run test-runner-fixer agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: test-runner-fixer
+          prompt: "Validate and fix test syntax for ${{ github.event.inputs.jira_id }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-tests
+          path: tests/
+
+  implement-feature:
+    name: "Stage 5 — Implement Feature (GREEN Phase)"
+    runs-on: ubuntu-latest
+    needs: validate-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: validated-tests, path: tests/ }
+      - uses: actions/download-artifact@v4
+        with: { name: context, path: .github/context/ }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - name: Run feature-developer agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: feature-developer
+          prompt: |
+            Implement feature for ${{ github.event.inputs.jira_id }}.
+            Make all tests pass. Coverage must be >= 90%.
+      - name: Run tests (GREEN gate)
+        run: pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=90
+      - uses: actions/upload-artifact@v4
+        with:
+          name: implementation
+          path: |
+            src/
+            tests/
+            requirements.txt
+
+  generate-docs:
+    name: "Stage 6 — Generate Test Scenario Docs"
+    runs-on: ubuntu-latest
+    needs: implement-feature
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: implementation, path: . }
+      - name: Run doc-generator agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: doc-generator
+          prompt: "Generate README-TEST-SCENARIOS.md for ${{ github.event.inputs.jira_id }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs
+          path: README-TEST-SCENARIOS.md
+
+  git-commit:
+    name: "Stage 7 — Create Branch & Commit"
+    runs-on: ubuntu-latest
+    needs: generate-docs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with: { name: implementation, path: . }
+      - uses: actions/download-artifact@v4
+        with: { name: docs, path: . }
+      - name: Configure git
+        run: |
+          git config user.email "tdd-agent@ci.local"
+          git config user.name "TDD Pipeline Agent"
+      - name: Run git-manager agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: git-manager
+          prompt: |
+            Create branch and commit for ${{ github.event.inputs.jira_id }}.
+            Branch: ${{ github.event.inputs.jira_id }}-get-country-capital-api (lowercase)
+
+  create-pr:
+    name: "Stage 8 — Create Pull Request"
+    runs-on: ubuntu-latest
+    needs: git-commit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Run pr-manager agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: pr-manager
+          prompt: "Create PR for ${{ github.event.inputs.jira_id }} targeting develop branch"
+
+  review-pr:
+    name: "Stage 9 — Review & Merge PR"
+    runs-on: ubuntu-latest
+    needs: create-pr
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run pr-reviewer agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: pr-reviewer
+          prompt: |
+            Review PR for ${{ github.event.inputs.jira_id }}.
+            Approve and merge if all standards are met.
+            Request changes with specific feedback if not.
+
+  pipeline-summary:
+    name: "Pipeline Summary"
+    runs-on: ubuntu-latest
+    needs: review-pr
+    if: always()
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: context, path: .github/context/ }
+      - name: Print pipeline state
+        run: |
+          echo "=== TDD Pipeline Complete ==="
+          echo "Jira: ${{ github.event.inputs.jira_id }}"
+          echo "Summary: ${{ github.event.inputs.jira_summary }}"
+          cat .github/context/pipeline-state.md 2>/dev/null || echo "Pipeline state not found"
+          echo ""
+          echo "Next step: Deploy to AWS and run e2e-validator agent"
+          echo "Command: claude --agent e2e-validator 'Validate ${{ github.event.inputs.jira_id }} at https://your-api-url'"

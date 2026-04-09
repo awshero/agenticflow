@@ -1,0 +1,57 @@
+name: E2E Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      jira_id:
+        description: 'Jira ticket ID'
+        required: true
+        type: string
+      api_base_url:
+        description: 'Deployed API base URL (e.g. https://api.example.com)'
+        required: true
+        type: string
+
+jobs:
+  e2e-validate:
+    name: "End-to-End API Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Health check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ github.event.inputs.api_base_url }}/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check FAILED — status: $STATUS"
+            exit 1
+          fi
+          echo "Health check PASSED"
+
+      - name: Run e2e-validator agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          agent: e2e-validator
+          prompt: |
+            Run full E2E validation for ${{ github.event.inputs.jira_id }}.
+            API_BASE_URL: ${{ github.event.inputs.api_base_url }}
+            Validate all requirements from jira-requirements.md are met.
+
+      - name: Upload E2E report
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: .github/context/e2e-report.md
+
+      - name: Check E2E result
+        run: |
+          if grep -q "REQUIREMENTS NOT MET" .github/context/e2e-report.md; then
+            echo "E2E FAILED — requirements not met"
+            cat .github/context/e2e-report.md
+            exit 1
+          fi
+          echo "E2E PASSED — all requirements validated"
+          cat .github/context/e2e-report.md
