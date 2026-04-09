@@ -1,100 +1,102 @@
 ---
 name: PR Manager
-description: Stage 8 — Creates a Pull Request from the feature branch to develop using the PR template, with full Jira context, test results, and API contract details.
+description: Stage 8 — Pushes the feature branch and creates a Pull Request to develop with full Jira context, test results, and API contract details derived from the actual implementation.
 ---
 
-You create a well-documented Pull Request that gives reviewers everything they need to approve without guessing.
+You push the branch to remote and open a well-documented Pull Request.
+All PR content must be derived from the context files — do not invent details.
 
 ## Inputs — Read These First
 
-1. `.github/context/jira-requirements.md`
-2. `.github/context/implementation-report.md`
-3. `.github/context/test-run-report.md`
-4. `.github/context/git-report.md`
+1. `.github/context/jira-requirements.md` — Jira ID, summary, acceptance criteria
+2. `.github/context/implementation-report.md` — files created, test count, coverage, API contract
+3. `.github/context/git-report.md` — branch name
 
-## Step 1: Verify Branch is Pushed
+## Step 1: Push Branch
 
-```bash
-git branch -vv
-```
-
-If the branch has no upstream, push it first:
 ```bash
 git push -u origin {branch-name}
 ```
 
-## Step 2: Get Test Results
+If push fails due to no remote, ask the user: "Please add a GitHub remote with `git remote add origin {url}` then confirm."
+
+## Step 2: Get Live Test Results
 
 ```bash
-pytest tests/ -v --cov=src --cov-report=term-missing -q 2>&1 | tail -20
+pytest tests/ -q --tb=no --cov=src --cov-report=term-missing 2>&1 | tail -6
 ```
 
-Copy the summary line (e.g. `70 passed, coverage: 97%`).
+Copy the summary line (e.g. `70 passed in 0.16s`).
 
-## Step 3: Create PR
+## Step 3: Build PR Body from Context Files
+
+Read `implementation-report.md` for:
+- List of files created and their purpose
+- API contract (method, path, response schemas)
+- Test count and coverage number
+
+Read `jira-requirements.md` for:
+- Jira ID and full summary text
+- Acceptance criteria list
+
+Read `codebase-context.md` for:
+- How to run the app locally (framework-specific command)
+
+## Step 4: Create PR
 
 ```bash
 gh pr create \
   --base develop \
-  --title "{JIRA-ID}: {feature description}" \
+  --title "{JIRA-ID}: {jira summary}" \
   --body "$(cat <<'EOF'
 ## Jira Ticket
-**{JIRA-ID}** — {full requirement text}
+**{JIRA-ID}** — {jira summary from jira-requirements.md}
 
 ## What Changed
-- GET /countries/{country_name}/capital endpoint added
-- Country capital service with case-insensitive lookup
-- Input validation (empty, digits, special characters)
-- 100+ country dataset
+{bullet list of files created with one-line descriptions, from implementation-report.md}
 
 ## Test Results
-| | |
-|-|-|
-| Total tests | N |
-| Passed | N |
-| Coverage | N% |
-| Unit tests | N |
-| Integration tests | N |
+| Metric | Value |
+|--------|-------|
+| Total tests | {N from implementation-report.md} |
+| Passed | {N} |
+| Coverage | {N}% |
+| Unit tests | {N} |
+| Integration tests | {N} |
 
 ## API Contract
 \`\`\`
-GET /countries/{country_name}/capital
-200: {"country": "France", "capital": "Paris"}
-404: {"detail": "Country not found: Wakanda"}
-400: {"detail": "Invalid country name"}
-
-GET /health
-200: {"status": "healthy"}
+{full API contract from implementation-report.md}
 \`\`\`
+
+## Acceptance Criteria
+{paste the AC checklist from jira-requirements.md with checkboxes}
 
 ## How to Test Locally
 \`\`\`bash
-source .venv/bin/activate
-pytest tests/ -v
-uvicorn src.main:app --reload
-curl http://localhost:8000/countries/France/capital
+{install and run commands appropriate for this stack, from codebase-context.md}
 \`\`\`
 
 ## TDD Checklist
-- [x] Tests written first (RED phase)
-- [x] All tests passing (GREEN phase)
+- [x] Tests written first (RED phase — Stage 3)
+- [x] All tests passing (GREEN phase — Stage 5)
 - [x] Coverage >= 90%
 - [x] API standards followed
 - [x] README-TEST-SCENARIOS.md updated
 - [x] Conventional commit format used
-- [x] Branch name follows convention
+- [x] Branch name follows {JIRA-ID}-{description} convention
 EOF
 )"
 ```
 
-## Step 4: Output
+## Step 5: Output
 
 Write `.github/context/pr-report.md`:
 ```markdown
 # PR Report
-PR URL: {url}
-Branch: {branch} → develop
+PR URL: {url printed by gh pr create}
+Branch: {branch-name} → develop
 Status: Open
 ```
 
-Print the PR URL so the user can open it.
+Print the PR URL so the user can open it immediately.

@@ -4,13 +4,13 @@ description: Stage 7 — Creates the feature branch using Jira ID naming convent
 ---
 
 You handle git operations: branch creation, staging, and committing.
-You do NOT push to remote (the user or CI handles that).
+You do NOT push to remote — that happens in Stage 8 (PR Manager).
 
 ## Inputs — Read These First
 
-1. `.github/context/jira-requirements.md` — for Jira ID and description
-2. `.github/context/implementation-report.md` — for commit body content
-3. `.github/standards/git-standards.md` — branch and commit rules
+1. `.github/context/jira-requirements.md` — Jira ID and feature description for branch name and commit
+2. `.github/context/implementation-report.md` — what was built, for commit body
+3. `.github/standards/git-standards.md` — branch naming and commit format rules
 
 ## Step 1: Check Current State
 
@@ -19,18 +19,21 @@ git status
 git branch
 ```
 
-Confirm you are on the right starting branch (usually `develop`).
-Confirm there are staged or unstaged changes to commit.
+Confirm you are on the correct starting branch (usually `develop`).
+If already on a feature branch, skip Step 2.
 
 ## Step 2: Create Feature Branch
 
-Branch naming rule: `{JIRA-ID}-{short-description}`
-- All lowercase
-- Hyphens only (no underscores, no spaces)
-- Starts with Jira ID
-- Max 60 characters
+Derive the branch name from the Jira requirements:
+- Format: `{JIRA-ID}-{short-description}`
+- All lowercase, hyphens only, no spaces or underscores
+- Keep under 60 characters total
+- Must start with the Jira ID
 
-Examples: `proj-1-get-country-capital-api`, `proj-42-fix-null-response`
+Derive the short description from the Jira summary (2–4 words max):
+- "Create a GET API endpoint to parse country name and return the capital" → `proj-1-get-country-capital-api`
+- "Add user authentication with JWT" → `proj-42-user-jwt-auth`
+- "Fix null pointer in order service" → `proj-99-fix-order-null`
 
 ```bash
 git checkout -b {branch-name}
@@ -38,7 +41,7 @@ git checkout -b {branch-name}
 
 ## Step 3: Stage Files
 
-Stage only these paths:
+Stage only project files — never secrets or build artifacts:
 ```bash
 git add src/
 git add tests/
@@ -50,34 +53,40 @@ git add .github/context/
 
 Never stage: `.env`, `.venv/`, `__pycache__/`, `*.pyc`, `htmlcov/`, `.coverage`
 
-Verify what will be committed:
+Verify before committing:
 ```bash
 git diff --staged --stat
 ```
 
-## Step 4: Commit
+## Step 4: Write the Commit Message
 
 Format: `{type}({scope}): {short description}`
 
-Types: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`
+Derive `type` from the Jira ticket type:
+- New feature → `feat`
+- Bug fix → `fix`
+- Test-only change → `test`
+- Documentation → `docs`
+- Refactor → `refactor`
 
-Example:
-```
-feat(countries): add GET /countries/{name}/capital endpoint
+Derive `scope` from the feature area (e.g. `countries`, `users`, `orders`, `auth`).
 
-- TDD: tests written first (RED), then implementation (GREEN)
-- 70 tests (unit + integration), 97% coverage
-- Returns {"country": str, "capital": str} on 200
-- Returns {"detail": "..."} on 404 and 400
-- Dataset: 100+ countries
+Derive the commit body from `implementation-report.md`:
+- Number of tests and coverage
+- What files were created
+- The API contract (method, path, response shapes)
+- Jira ticket reference
 
-Jira: PROJ-1-get-country-capital-api
-```
-
-Run:
 ```bash
 git commit -m "$(cat <<'EOF'
-{commit message here}
+{type}({scope}): {short description}
+
+{2–4 lines describing what was built}
+- {test count} tests ({unit + integration}), {coverage}% coverage
+- {key implementation detail}
+- {API contract summary}
+
+Jira: {JIRA-ID}
 EOF
 )"
 ```
@@ -95,7 +104,7 @@ Write `.github/context/git-report.md`:
 ```markdown
 # Git Report
 Branch: {branch-name}
-Commit: {short hash}
+Commit: {short hash} — {commit subject}
 Files changed: N
-Status: ready to push / push required
+Status: committed, ready to push
 ```

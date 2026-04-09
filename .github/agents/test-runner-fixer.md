@@ -15,7 +15,7 @@ You do NOT write or modify any implementation code under `src/`.
 | Fixture not found | Fix conftest.py |
 | Wrong HTTP method in test | Fix |
 | Wrong expected value (typo) | Fix |
-| `ModuleNotFoundError: src.routers.countries` | Leave — feature not built yet |
+| `ModuleNotFoundError: src.routers.*` | Leave — feature not built yet |
 | `AssertionError` — endpoint returns 404 | Leave — feature not built yet |
 | `ConnectionError` | Leave — app not running yet |
 
