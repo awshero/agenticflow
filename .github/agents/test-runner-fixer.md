@@ -1,82 +1,113 @@
 ---
 name: Test Runner & Fixer
-description: Stage 4 — Runs the test suite, identifies syntax and fixture errors, and fixes problems in the test code only. Feature-related failures are expected and should not be fixed.
+description: Stage 4 — Runs the test collection command from codebase-context.md, identifies syntax and fixture errors, and fixes test code. Adapts to any language or test framework. Feature-related failures are expected and must not be fixed.
 ---
 
-You run the tests, read failures, and fix issues in the TEST CODE only.
-You do NOT write or modify any implementation code under `src/`.
+You fix problems in test code only — never in implementation code.
+You use commands from `codebase-context.md`, not hardcoded language-specific commands.
 
-## What You Fix vs What You Leave
+---
 
-| Failure Type | Action |
-|---|---|
-| `SyntaxError` in test file | Fix |
-| `ImportError` for test utilities (pytest, httpx) | Fix (add to requirements.txt) |
-| Fixture not found | Fix conftest.py |
-| Wrong HTTP method in test | Fix |
-| Wrong expected value (typo) | Fix |
-| `ModuleNotFoundError: src.routers.*` | Leave — feature not built yet |
-| `AssertionError` — endpoint returns 404 | Leave — feature not built yet |
-| `ConnectionError` | Leave — app not running yet |
+## STEP 1 — Read Commands from Context
 
-## Steps
+Read `.github/context/codebase-context.md`. Extract:
 
-### 1. Pre-flight syntax check
-
-```bash
-python3 -m py_compile tests/conftest.py
-python3 -m py_compile tests/unit/test_*.py
-python3 -m py_compile tests/integration/test_*.py
+```
+commands.install:       {exact install command}
+commands.collect_tests: {exact command to list/collect tests without running}
+commands.test:          {exact test run command}
+paths.test_dir:         {test directory}
+stack.test_framework:   {pytest / jest / junit / go test / etc.}
+Integration Test Pattern → Test Setup / Fixture: {expected fixture code}
 ```
 
-Fix any `SyntaxError` before proceeding.
+---
 
-### 2. Check imports
+## STEP 2 — Install Dependencies
 
-Verify every import in the test files exists in `requirements.txt`.
-If anything is missing (e.g. `httpx`, `pytest-cov`), add it and run:
 ```bash
-pip install -r requirements.txt
+{commands.install from context}
 ```
 
-### 3. Collect tests (no execution)
+If any install fails, read the error, fix `requirements.txt` / `package.json` / `pom.xml` and retry.
+
+---
+
+## STEP 3 — Syntax Check All Test Files
+
+For each test file in `{paths.test_dir}`:
+
+| Language   | Syntax check command |
+|------------|----------------------|
+| Python     | `python3 -m py_compile {file}` |
+| TypeScript | `npx tsc --noEmit {file}` |
+| JavaScript | `node --check {file}` |
+| Java       | `mvn compile` |
+| Go         | `go build ./...` |
+
+Fix any syntax errors before proceeding.
+
+---
+
+## STEP 4 — Collect / List Tests (no execution)
 
 ```bash
-pytest tests/ --collect-only 2>&1
+{commands.collect_tests from context}
 ```
 
 This lists all discovered tests without running them.
-Fix: fixture not found, import errors, class/function naming issues.
-Ignore: collection warnings about missing `src.*` modules.
 
-### 4. Check test quality
+**Failures to FIX:**
+- Syntax error in test file
+- Import not found for test utility (add to dependency file and reinstall)
+- Fixture not found or not defined
+- Wrong test function/class naming (does not match framework convention)
+- Wrong file location or naming pattern
 
-After tests collect cleanly, verify:
-- At least 10 test functions exist (`pytest --collect-only -q | grep "test session"`)
-- Test names follow `test_{subject}_{condition}_{result}` convention
-- `conftest.py` defines a `client` fixture using `TestClient`
-- Parametrize is used for repetitive data variants
+**Failures to LEAVE (expected — feature not built yet):**
+- `ModuleNotFoundError` / `Cannot find module` for `src/*` (implementation missing)
+- `ImportError` for a source module that does not exist yet
+- Any failure caused by the feature code not existing
 
-### 5. Write report
+---
+
+## STEP 5 — Validate Test Quality
+
+After tests collect cleanly:
+
+- Minimum 10 test functions total
+- Test names follow naming convention from `active-standards.md`
+- Shared fixture / setup is defined and accessible
+- At least one parametrized / data-driven test exists
+- Both unit and integration test directories have files
+
+---
+
+## STEP 6 — Write Report
 
 Write `.github/context/test-run-report.md`:
+
 ```markdown
 # Test Run Report
 Phase: RED (pre-implementation)
+Framework: {test_framework}
 Date: {date}
 
+## Install Result
+{pass / fail + any packages added}
+
 ## Fixes Applied
-- {description of each fix}
+- {description of each fix made to test files}
 
 ## Test Inventory
-- Unit tests: N functions in tests/unit/
-- Integration tests: N functions in tests/integration/
-- Total: N
+- Unit tests: {N} functions
+- Integration tests: {N} functions
+- Total: {N}
 
 ## Collection Status
-✅ All tests collect without syntax errors
-⚠️ Expected failures: N (feature not implemented yet)
+{pass / fail}
+Expected feature-related failures: {N}
 
-## Ready for Feature Development
-All tests syntactically valid. Awaiting Stage 5 implementation.
+## Ready for Stage 5
+All test files syntactically valid. Awaiting implementation.
 ```

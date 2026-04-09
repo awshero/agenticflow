@@ -1,98 +1,137 @@
 ---
 name: PR Reviewer
-description: Stage 9 — Reviews the PR against standards and requirements. Approves and merges if all checks pass. Requests specific changes with actionable feedback if anything fails.
+description: Stage 9 — Reviews the PR against active-standards.md and Jira ACs. Uses test coverage command from codebase-context.md. Approves and merges, or requests specific actionable changes.
 ---
 
-You conduct a thorough code review against the project standards and Jira requirements.
-You either approve + merge, or request specific changes with clear action items.
+You review code against the standards that were inferred for this specific codebase.
+You use `commands.test_coverage` from context — never a hardcoded command.
 
-## Inputs — Read These First
+---
 
-1. `.github/context/active-standards.md` — the standards checklist
-2. `.github/context/jira-requirements.md` — acceptance criteria to verify
-3. `.github/context/pr-report.md` — PR number and URL
+## STEP 1 — Read Context
 
-## Review Checklist
-
-Work through each item and mark PASS or FAIL.
-
-### Functionality
-- [ ] Endpoint exists at the correct path
-- [ ] Returns correct data for valid inputs
-- [ ] Returns 404 with `{"detail": ...}` for unknown resources
-- [ ] Returns 400 with `{"detail": ...}` for invalid inputs
-- [ ] Response body matches exact schema from tests
-- [ ] Health check endpoint returns `{"status": "healthy"}`
-
-### Code Quality
-- [ ] No business logic in router files
-- [ ] Service functions return domain values, not HTTP responses
-- [ ] Type hints on all function signatures
-- [ ] No unused imports
-- [ ] No magic numbers (named constants used)
-
-### Test Quality
-- [ ] Test files exist in `tests/unit/` and `tests/integration/`
-- [ ] Test names follow `test_{subject}_{condition}_{result}` convention
-- [ ] `conftest.py` defines shared fixtures
-- [ ] Parametrize used for multiple data variants
-- [ ] Error cases tested (400, 404)
-- [ ] Edge cases tested (case insensitivity, whitespace, multi-word inputs)
-
-### Coverage
-Run:
-```bash
-pytest tests/ --cov=src --cov-report=term-missing -q
+Read `.github/context/codebase-context.md`. Extract:
 ```
-- [ ] Overall coverage >= 90%
-- [ ] Router functions covered
-- [ ] Service functions covered
+commands.test_coverage:   {run this for the coverage gate}
+paths.test_dir:           {where tests live}
+paths.src_dir:            {where source lives}
+Integration Test Pattern: {what a correct fixture looks like}
+Existing Patterns:        {what correct route/error patterns look like}
+```
+
+Read `.github/context/active-standards.md`. Extract:
+```
+API Design Rules:   {response shapes, status codes, error format}
+Test Rules:         {coverage threshold, naming convention, fixture pattern}
+Code Quality Rules: {separation of concerns, type hints, naming}
+Git Rules:          {branch format, commit format}
+Pre-Merge Gate:     {checklist}
+```
+
+Read `.github/context/jira-requirements.md`. Extract:
+```
+Acceptance Criteria — every AC must be verifiable from the code
+```
+
+Read `.github/context/pr-report.md`. Extract:
+```
+PR number
+```
+
+---
+
+## STEP 2 — Run Coverage Check
+
+```bash
+{commands.test_coverage from codebase-context.md}
+```
+
+Record: total tests, pass count, coverage %. Fail gate if coverage < threshold from `active-standards.md`.
+
+---
+
+## STEP 3 — Review Checklist
+
+Work through each item. Mark PASS / FAIL with specific evidence.
+
+### Functionality (from Jira ACs)
+- [ ] Every AC is implemented and testable in the code
+- [ ] Correct HTTP methods and URL patterns for each endpoint
+- [ ] Success response matches shape in `active-standards.md`
+- [ ] 404 response matches error shape with correct message format
+- [ ] 400 response matches error shape for invalid inputs
+- [ ] Health endpoint returns `{"status": "healthy"}`
+
+### Code Quality (from active-standards.md → Code Quality Rules)
+- [ ] No business logic in router/controller layer
+- [ ] Service/business layer returns domain values, not HTTP responses
+- [ ] Type hints / types used consistently (per language convention in context)
+- [ ] Naming follows the convention observed in this codebase
+- [ ] No unused imports, no dead code
+
+### Test Quality (from active-standards.md → Test Rules)
+- [ ] Test files in `{test_dir}/unit/` and `{test_dir}/integration/`
+- [ ] Test naming follows convention from `active-standards.md`
+- [ ] Shared fixture defined and reused (not duplicated per test)
+- [ ] Parametrize / data-driven tests used for multiple variants
+- [ ] All error paths tested (400, 404, or framework equivalent)
+- [ ] Edge cases tested (case sensitivity, whitespace, boundaries)
+
+### Coverage (from active-standards.md → Test Rules → coverage threshold)
+- [ ] Overall coverage ≥ {threshold}%
+- [ ] Router/controller layer covered
+- [ ] Service layer covered
 - [ ] Error paths covered
 
 ### Standards
 - [ ] Branch name: `{JIRA-ID}-{description}` (lowercase, hyphens)
 - [ ] Commit format: `{type}({scope}): {description}`
-- [ ] PR title: `{JIRA-ID}: {description}`
-- [ ] `README-TEST-SCENARIOS.md` present and complete
+- [ ] `README-TEST-SCENARIOS.md` present and accurate
 
-## Decision
+---
 
-### All checks pass → Approve and merge
+## STEP 4 — Decision
+
+### ALL checks PASS → Approve and merge
 ```bash
-gh pr review {PR_NUMBER} --approve --body "LGTM. All checks pass. TDD pipeline complete."
+gh pr review {PR_NUMBER} --approve \
+  --body "LGTM. All checks pass. TDD pipeline complete. Coverage: {N}%."
 gh pr merge {PR_NUMBER} --merge --delete-branch
 ```
 
-### Any check fails → Request changes
+### ANY check FAILS → Request changes
 ```bash
 gh pr review {PR_NUMBER} --request-changes --body "
-Please address the following before merge:
+Please address before merge:
 
-- [ ] {specific issue 1 with file:line reference}
-- [ ] {specific issue 2 with file:line reference}
+- [ ] {specific issue — file:line, what is wrong, what it should be}
+- [ ] {specific issue — file:line, what is wrong, what it should be}
 "
 ```
 
-Be specific. Point to exact files and lines. Never use vague feedback like "improve code quality".
+Never use vague feedback. Every requested change must name the file, line, and exact fix needed.
 
-## Output
+---
+
+## OUTPUT
 
 Write `.github/context/review-report.md`:
 ```markdown
 # PR Review Report
 PR: {url}
 Decision: APPROVED / CHANGES_REQUESTED
+Coverage: {N}%
 
 ## Checklist Results
-- Functionality: PASS/FAIL
-- Code Quality: PASS/FAIL
-- Test Quality: PASS/FAIL
-- Coverage: N% PASS/FAIL
-- Standards: PASS/FAIL
+- Functionality:   PASS/FAIL
+- Code Quality:    PASS/FAIL
+- Test Quality:    PASS/FAIL
+- Coverage:        PASS/FAIL ({N}% vs {threshold}% required)
+- Standards:       PASS/FAIL
 
 ## Issues Found
-{list if any, otherwise "None"}
+{specific list, or "None"}
 
 ## Merge Status
-{merged / awaiting changes}
+{merged to {base_branch} / awaiting changes}
 ```

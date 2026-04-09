@@ -1,86 +1,91 @@
 # GitHub Copilot — TDD Pipeline Instructions
 
-This repository follows a strict **Test-Driven Development (TDD)** pipeline.
-Copilot must follow these rules in every suggestion, edit, and agent task.
+This repository uses a **fully dynamic TDD pipeline** via custom agents in `.github/agents/`.
+Agents auto-detect the codebase and generate all context, standards, and commands at runtime.
+No pre-existing configuration is needed — drop the `.github/agents/` folder into any repo.
 
 ---
 
-## TDD Workflow (mandatory)
-
-Always follow RED → GREEN → REFACTOR:
-1. **RED**: Write failing tests first. Never write implementation before tests.
-2. **GREEN**: Write the minimal code to make tests pass.
-3. **REFACTOR**: Clean up without breaking tests.
-
----
-
-## Project Structure
+## How It Works
 
 ```
-src/
-├── main.py              # FastAPI app entry point
-├── routers/             # HTTP route handlers only (no business logic)
-├── services/            # Business logic and validation
-└── data/                # Static data and constants
-
-tests/
-├── conftest.py          # Shared pytest fixtures
-├── unit/                # Unit tests (test service layer in isolation)
-└── integration/         # Integration tests (test full HTTP cycle via TestClient)
-
-.github/
-├── prompts/             # Copilot agent prompt files (one per TDD stage)
-├── standards/           # Coding, API, testing, and git standards
-├── context/             # Jira requirements and pipeline state
-└── workflows/           # GitHub Actions CI/CD pipelines
+Any Repo (any language / framework)
+    ↓ Drop .github/agents/ in
+    ↓
+TDD Orchestrator ──asks──► Jira requirement text
+    ↓
+Context Builder ──scans codebase──► codebase-context.md
+  (auto-detects: language, framework, test framework, paths, commands, patterns)
+    ↓
+Standards Loader ──infers from code──► active-standards.md
+  (infers: API rules, test conventions, code quality rules, git rules)
+    ↓
+Test Generator ──reads context + ACs──► test files (RED phase)
+    ↓
+Test Runner & Fixer ──uses commands from context──► valid test suite
+    ↓
+Feature Developer ──reads tests + context──► implementation (GREEN phase)
+    ↓
+Doc Generator, Git Manager, PR Manager, PR Reviewer, E2E Validator
 ```
 
----
-
-## Standards (always apply)
-
-### API Design
-- Use nouns in URLs: `/users/{id}/profile` not `/getUserProfile`
-- Status codes: 200 success, 400 bad input, 404 not found, 500 server error
-- All responses must be JSON: `{"field": value}` — no bare strings
-- Error responses: `{"detail": "human-readable message"}`
-
-### Python / FastAPI
-- All function signatures must have type hints
-- Routers handle HTTP only — no business logic
-- Services handle business logic — return domain values, not HTTP responses
-- Use `Optional[str]` for Python 3.9, `str | None` for 3.10+
-- Imports order: stdlib → third-party → local
-
-### Testing
-- Minimum 90% code coverage (enforced by pytest.ini)
-- Test naming: `test_{subject}_{condition}_{expected_result}`
-- AAA pattern: Arrange / Act / Assert
-- Use `@pytest.mark.parametrize` for multiple data variants
-- `conftest.py` for shared fixtures only
-
-### Git
-- Branch format: `{JIRA-ID}-{short-description}` (lowercase, hyphens)
-- Commit format: `{type}({scope}): {description}` (Conventional Commits)
-- PR base branch: `develop`
+Every agent reads from **two sources only**:
+1. `.github/context/codebase-context.md` — for all commands, paths, and patterns
+2. `.github/context/active-standards.md` — for all rules and conventions
 
 ---
 
-## Copilot Agent Prompts
+## Key Design Principles
 
-The following prompt files are available in `.github/prompts/`. Invoke them in
-Copilot Chat using `@workspace` and referencing the prompt file:
+- **No assumptions** — Context Builder detects everything from the repo itself
+- **No hardcoded commands** — all agents use `commands.*` from `codebase-context.md`
+- **No hardcoded paths** — all agents use `paths.*` from `codebase-context.md`
+- **No hardcoded test patterns** — agents use `Integration Test Pattern` from context
+- **Standards are inferred** — Standards Loader reads existing code to find conventions
+- **Static standards files are optional** — `.github/standards/*.md` serve as overrides only
 
-| Prompt File | Stage | Purpose |
-|-------------|-------|---------|
-| `tdd-orchestrator.prompt.md` | Entry | Run the full pipeline |
-| `context-builder.prompt.md` | 1 | Scan codebase and build context |
-| `standards-loader.prompt.md` | 2 | Compile active standards |
-| `test-generator.prompt.md` | 3 | Write all tests (RED phase) |
-| `test-runner-fixer.prompt.md` | 4 | Run and fix test issues |
-| `feature-developer.prompt.md` | 5 | Implement feature (GREEN phase) |
-| `doc-generator.prompt.md` | 6 | Generate README-TEST-SCENARIOS.md |
-| `git-manager.prompt.md` | 7 | Branch, commit, push |
-| `pr-manager.prompt.md` | 8 | Create pull request |
-| `pr-reviewer.prompt.md` | 9 | Review and merge PR |
-| `e2e-validator.prompt.md` | 10 | End-to-end API validation |
+---
+
+## Using the Pipeline
+
+### In VS Code Copilot Chat (Agent Mode)
+1. Open Copilot Chat (`Cmd+Alt+I`)
+2. Switch to **Agent** mode
+3. Select **TDD Orchestrator** from the agent picker
+4. Paste your Jira requirement text
+
+### Manually invoking a single stage
+Select the specific agent from the Copilot agent picker:
+- `Context Builder` — re-scan the codebase
+- `Test Generator` — write tests for a new requirement
+- `Feature Developer` — implement a feature from existing tests
+- `E2E Validator` — validate a deployed API
+
+---
+
+## Context Files (generated at runtime)
+
+These files are created by agents during the pipeline — do not edit manually:
+
+| File | Created by | Purpose |
+|------|-----------|---------|
+| `.github/context/jira-requirements.md` | TDD Orchestrator | Requirement and ACs |
+| `.github/context/codebase-context.md` | Context Builder | Stack, commands, patterns |
+| `.github/context/active-standards.md` | Standards Loader | Inferred rules checklist |
+| `.github/context/test-plan.md` | Test Generator | Test inventory |
+| `.github/context/test-run-report.md` | Test Runner & Fixer | Pre-impl test status |
+| `.github/context/implementation-report.md` | Feature Developer | API contract, coverage |
+| `.github/context/pipeline-state.md` | TDD Orchestrator | Stage tracking |
+| `.github/context/git-report.md` | Git Manager | Branch and commit info |
+| `.github/context/pr-report.md` | PR Manager | PR URL |
+| `.github/context/review-report.md` | PR Reviewer | Review decision |
+| `.github/context/e2e-report.md` | E2E Validator | Final validation |
+
+---
+
+## Standards Files (optional overrides)
+
+If `.github/standards/*.md` files exist, `Standards Loader` merges them with inferred standards.
+Static files take precedence over inferences for any rule they define.
+
+If they do not exist, `Standards Loader` infers everything from the codebase — no action needed.

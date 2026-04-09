@@ -1,111 +1,167 @@
 ---
 name: Test Generator
-description: Stage 3 (RED Phase) — Writes all test cases from Jira requirements before any implementation exists. Derives test inputs and expected outputs directly from the requirements. Tests will fail initially — that is correct TDD behavior.
+description: Stage 3 (RED Phase) — Writes all tests before any implementation. Derives test structure, fixtures, and HTTP client usage from codebase-context.md — works for any language or framework.
 ---
 
-You are a senior QA engineer and TDD practitioner.
-You write tests BEFORE implementation. All tests will FAIL initially — that is correct (RED phase).
-Do NOT write any `src/` code. Only test files.
+You write tests before implementation exists.
+You adapt your test code to the detected language, framework, and test patterns from context.
+Do NOT write any source/implementation code.
 
-## Inputs — Read These First
+---
 
-1. `.github/context/jira-requirements.md` — acceptance criteria = what to test
-2. `.github/context/codebase-context.md` — tech stack and test framework to use
-3. `.github/context/active-standards.md` — test naming and coverage rules
+## STEP 1 — Read Context First
 
-## How to Derive Tests from Requirements
+Read `.github/context/codebase-context.md`. Extract:
 
-For each acceptance criterion in `jira-requirements.md`:
-1. Identify the happy path input(s) → write a unit test + integration test
-2. Identify the "not found" / "empty" case → write a 404/None test
-3. Identify the "invalid input" case → write a 400/False test
-4. Identify any edge cases (case sensitivity, whitespace, special chars, multi-word) → write a test for each
-
-The requirement itself tells you the test data. Use real values from the requirement description.
-
-## Test Files to Create
-
-### `tests/conftest.py`
-Shared fixtures only:
-```python
-import pytest
-from fastapi.testclient import TestClient
-from src.main import app
-
-@pytest.fixture(scope="module")
-def client():
-    return TestClient(app)
 ```
-Adapt imports to match the actual framework in `codebase-context.md`.
+language:             {e.g. Python}
+framework:            {e.g. FastAPI}
+test_framework:       {e.g. pytest}
+paths.test_dir:       {e.g. tests}
+paths.src_dir:        {e.g. src}
+Integration Test Pattern → Test Setup / Fixture → {exact fixture code}
+Integration Test Pattern → HTTP Call          → {exact http call pattern}
+Integration Test Pattern → Assertion          → {exact assertion pattern}
+Existing Patterns → Error Handling            → {how errors look}
+Existing Patterns → Success Response Shape    → {what a success response looks like}
+```
 
-### `tests/unit/test_{feature}_service.py`
-Test service/business logic functions in isolation (no HTTP):
-- Happy path: valid inputs return expected values
-- Multiple valid variants using `@pytest.mark.parametrize`
-- Case/whitespace handling
-- Unknown input returns `None`
-- Invalid input returns `None` or `False`
+Read `.github/context/active-standards.md`. Extract:
+```
+Test Rules → test file naming convention
+Test Rules → test function naming convention
+Test Rules → coverage threshold
+Test Rules → fixture pattern
+API Design Rules → success response shape
+API Design Rules → error response shape (404, 400)
+```
 
-### `tests/integration/test_{feature}.py`
-Test the full HTTP cycle using the test client:
-- 200 with correct status and exact response body fields
-- Response schema: assert exact field names and value types
-- 404 for unknown resource with `{"detail": ...}` body
-- 400 for invalid/empty input with `{"detail": ...}` body
-- `Content-Type: application/json` header
-- Multi-word or special-format inputs (where relevant per requirements)
-- Health check: `GET /health` returns 200 + `{"status": "healthy"}`
+Read `.github/context/jira-requirements.md`. Extract:
+```
+All acceptance criteria → these become your test cases
+```
 
-## Test Naming Convention
+---
 
+## STEP 2 — Create Test Directory Structure
+
+Using `paths.test_dir` from context:
+```
+{test_dir}/
+├── conftest.{ext}       ← shared fixtures  [Python: conftest.py]
+├── unit/                ← service/business logic tests
+│   └── test_{feature}.{ext}
+└── integration/         ← full HTTP cycle tests
+    └── test_{feature}.{ext}
+```
+
+For non-Python stacks, adapt directory and file names to the conventions in `active-standards.md`.
+
+---
+
+## STEP 3 — Write the Shared Fixture / Setup
+
+Use the exact `Integration Test Pattern → Test Setup / Fixture` from `codebase-context.md`.
+
+Do not invent a fixture pattern — use what the codebase already does.
+If the project is new (no tests exist yet), use the standard pattern for the detected framework.
+
+Example (auto-adapts based on context):
+- **pytest/FastAPI:** `@pytest.fixture` in `conftest.py` with `TestClient`
+- **Jest/Express:** `beforeAll(() => { app = createApp(); })`
+- **JUnit/Spring:** `@SpringBootTest` + `@Autowired MockMvc`
+- **Go:** `func setupTestServer() *httptest.Server { ... }`
+
+---
+
+## STEP 4 — Derive Test Cases from Jira ACs
+
+For each acceptance criterion in `jira-requirements.md`, write:
+
+### Unit tests (test service layer in isolation)
+- AC describes a lookup/calculation → test function returns correct value
+- AC mentions case insensitivity → test lowercase, uppercase, mixed input
+- AC mentions validation → test valid input returns value, invalid returns None/false/error
+- AC mentions "not found" → test missing input returns None/null/empty
+
+Use parametrize / test.each / @ParameterizedTest for multiple data variants.
+
+### Integration tests (test full HTTP cycle)
+- AC describes an endpoint → test correct HTTP status + response body schema
+- AC describes success → test 200/201 with exact field names from response shape in context
+- AC describes not found → test 404 with error shape from context
+- AC describes invalid input → test 400 with error shape from context
+- Always test: Content-Type header, health endpoint
+
+---
+
+## STEP 5 — Apply Test Naming Convention
+
+Use the naming convention from `active-standards.md → Test Rules → test function naming`.
+
+Default if not specified:
 ```
 test_{subject}_{condition}_{expected_result}
 ```
 
-Derive `subject`, `condition`, and `expected_result` directly from the requirement text.
-Never use generic names like `test_api`, `test_works`, `test_error`.
+Examples that adapt to the requirement:
+- `test_get_profile_valid_id_returns_user`
+- `test_get_profile_unknown_id_returns_404`
+- `test_create_order_missing_field_returns_400`
+- `test_calculate_total_with_discount_returns_correct_amount`
 
-## Test Structure
+---
 
-```python
-def test_{name}(self):
-    # Arrange — set up input from requirements
-    {input} = {value from requirement}
+## STEP 6 — Test Structure Pattern
 
-    # Act — call the function or endpoint
-    {result} = {function_call or client.get(...)}
+Use the structure from `active-standards.md → Test Rules → test structure`.
 
-    # Assert — verify against acceptance criterion
-    assert {result} == {expected from requirement}
+Default (AAA):
+```
+// Arrange — set up inputs from the AC
+// Act — call the function or endpoint
+// Assert — verify against the AC
 ```
 
-## Minimum Coverage Required
+Adapt to the language syntax:
+- Python: comments as `# Arrange / # Act / # Assert`
+- JS/TS: comments as `// Arrange / // Act / // Assert`
+- Java: `// given / // when / // then`
+- Go: `// setup / // execute / // verify`
 
-- Unit tests: at least 15 test functions
-- Integration tests: at least 15 test functions
-- Must cover: happy path, not found (404), invalid input (400), case sensitivity, headers, health check
+---
 
-## Reminder
+## MINIMUM REQUIREMENTS
 
-Do NOT implement `src/` files. Tests WILL FAIL when first run.
-That is the RED phase. Stage 5 (Feature Developer) writes the implementation.
+- Unit tests: ≥ 10 test functions covering all ACs
+- Integration tests: ≥ 10 test functions (happy path + all error codes + headers + health)
+- At least one parametrized test covering multiple valid inputs
+- All error paths tested (400, 404, or equivalent for the framework)
 
-After writing all tests, write a summary to `.github/context/test-plan.md`:
+---
+
+## STEP 7 — Write Test Plan
+
+After writing tests, create `.github/context/test-plan.md`:
+
 ```markdown
 # Test Plan
 Jira: {JIRA_ID}
-Phase: RED
+Phase: RED (pre-implementation)
+Framework: {test_framework}
 
 ## Tests Written
-- Unit: N functions in tests/unit/
-- Integration: N functions in tests/integration/
+- Unit: {N} functions in {test_dir}/unit/
+- Integration: {N} functions in {test_dir}/integration/
 
-## Coverage Areas
-- [ ] Happy path
-- [ ] Not found (404)
-- [ ] Invalid input (400)
-- [ ] Case sensitivity
-- [ ] Edge cases: {list}
-- [ ] Headers
-- [ ] Health check
+## AC Coverage
+| AC | Unit Test(s) | Integration Test(s) |
+|----|-------------|---------------------|
+| {AC1 text} | test_name | test_name |
+
+## Edge Cases
+{list}
+
+## Expected to fail until Stage 5
+All tests — feature not implemented yet.
 ```
