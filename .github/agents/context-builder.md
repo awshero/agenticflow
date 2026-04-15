@@ -1,6 +1,6 @@
 ---
 name: Context Builder
-description: Stage 1 — Auto-detects language, framework, test framework, project structure, and all commands by scanning the repo. Also detects backend patterns (jobs, queues, workers, pipelines). Works for api, backend, and combined requirements.
+description: Stage 1 — Auto-detects language, framework, data platform, pipeline framework, ML framework, test framework, and all commands by scanning the repo. Produces codebase-context.md that every other agent reads. Works for any stack — API, backend jobs, data pipelines, ML, Snowflake, Databricks, dbt, Airflow, and more.
 ---
 
 You auto-detect everything about this codebase from scratch.
@@ -8,7 +8,7 @@ You receive no assumptions. You scan and learn.
 
 ---
 
-## STEP 1 — Detect Language & Framework
+## STEP 1 — Detect Language & Package Manager
 
 ```bash
 find . -maxdepth 2 \
@@ -20,7 +20,7 @@ find . -maxdepth 2 \
   -o -name "Gemfile" -o -name "Cargo.toml" \) | sort
 ```
 
-| Indicator file | Language | Package manager |
+| Indicator | Language | Package manager |
 |---|---|---|
 | requirements.txt / pyproject.toml | Python | pip |
 | package.json | JS / TypeScript | npm/yarn/pnpm |
@@ -30,146 +30,220 @@ find . -maxdepth 2 \
 | Gemfile | Ruby | bundler |
 | Cargo.toml | Rust | cargo |
 
-Read the dependency file in full. Identify:
-- Web framework (fastapi, express, spring-boot, gin, rails, etc.)
-- Background job framework (celery, rq, sidekiq, bull, quartz, etc.)
-- Message queue client (pika/aio-pika for RabbitMQ, kafka-python, boto3 SQS, etc.)
-- ORM / database client (sqlalchemy, prisma, hibernate, gorm, etc.)
-- Test framework (pytest, jest, junit, go test, rspec, etc.)
+Read the dependency file in full. Identify every framework below.
 
 ---
 
-## STEP 2 — Detect Project Paths
+## STEP 2 — Detect All Frameworks from Dependencies
+
+Read the dependency file and classify each detected library:
+
+### HTTP / API Frameworks
+| Library | Framework |
+|---|---|
+| fastapi, starlette | FastAPI |
+| flask | Flask |
+| django, djangorestframework | Django/DRF |
+| express, @nestjs/core | Express / NestJS |
+| spring-boot | Spring Boot |
+| gin-gonic/gin | Gin |
+| gorilla/mux | Gorilla Mux |
+
+### Data Platforms
+| Library | Platform |
+|---|---|
+| snowflake-connector-python, snowflake-sqlalchemy | Snowflake |
+| databricks-connect, databricks-sdk | Databricks |
+| delta-spark, delta | Delta Lake |
+| pyspark, apache-spark | Apache Spark |
+| google-cloud-bigquery, bigquery | BigQuery |
+| psycopg2, asyncpg, pg8000 | PostgreSQL |
+| boto3 + redshift | Redshift |
+| pymongo | MongoDB |
+| sqlalchemy | Generic SQL ORM |
+
+### Pipeline / Orchestration Frameworks
+| Library / File | Framework |
+|---|---|
+| apache-airflow, airflow | Apache Airflow |
+| prefect | Prefect |
+| dbt-core, dbt-snowflake, dbt-databricks | dbt |
+| delta-live-tables, dlt (imports) | Delta Live Tables (DLT) |
+| luigi | Luigi |
+| great_expectations | Great Expectations |
+
+### ML Frameworks
+| Library | Framework |
+|---|---|
+| mlflow | MLflow |
+| scikit-learn | scikit-learn |
+| tensorflow, keras | TensorFlow |
+| torch, pytorch | PyTorch |
+| xgboost, lightgbm | Gradient Boosting |
+
+### Background Job Frameworks
+| Library | Framework |
+|---|---|
+| celery | Celery |
+| rq | RQ |
+| dramatiq | Dramatiq |
+| bull, bullmq | Bull (Node) |
+| sidekiq | Sidekiq |
+
+### Test Frameworks
+| Library | Framework |
+|---|---|
+| pytest | pytest |
+| pytest-pyspark, chispa | pytest + PySpark |
+| dbt-tests | dbt tests |
+| great_expectations | Great Expectations |
+| jest, vitest | Jest / Vitest |
+| junit | JUnit |
+
+---
+
+## STEP 3 — Detect Project Paths
 
 ```bash
 # Source directories
-ls -d src/ app/ lib/ pkg/ cmd/ api/ 2>/dev/null
+ls -d src/ app/ lib/ pkg/ dbt/ pipelines/ jobs/ models/ notebooks/ 2>/dev/null
 
 # Test directories
-ls -d tests/ test/ __tests__/ spec/ src/test/ 2>/dev/null
+ls -d tests/ test/ __tests__/ spec/ 2>/dev/null
 
-# Entry points
-find . -maxdepth 3 -not -path './.git/*' -not -path './.venv/*' \
-  \( -name "main.py" -o -name "app.py" -o -name "index.ts" \
-  -o -name "index.js" -o -name "main.go" -o -name "Application.java" \) \
+# HTTP entry points
+find . -maxdepth 4 -not -path './.git/*' -not -path './.venv/*' \
+  \( -name "main.py" -o -name "app.py" -o -name "index.ts" -o -name "main.go" \) \
   | grep -v node_modules | head -5
 
-# Worker / job entry points
+# Pipeline / job entry points
 find . -maxdepth 4 -not -path './.git/*' -not -path './.venv/*' \
-  \( -name "worker.py" -o -name "celery.py" -o -name "tasks.py" \
-  -o -name "jobs.py" -o -name "consumer.py" -o -name "processor.py" \
-  -o -name "worker.ts" -o -name "worker.js" \
-  -o -name "*Worker.java" -o -name "*Job.java" \) \
+  \( -name "worker.py" -o -name "tasks.py" -o -name "jobs.py" \
+  -o -name "pipeline.py" -o -name "dag*.py" -o -name "*_dag.py" \
+  -o -name "dbt_project.yml" -o -name "profiles.yml" \) \
   | grep -v node_modules | head -10
+
+# Data platform config
+find . -maxdepth 3 \
+  \( -name "dbt_project.yml" -o -name "profiles.yml" \
+  -o -name "databricks.yml" -o -name "databricks-connect.cfg" \
+  -o -name ".snowflake" -o -name "snowflake_config.yml" \) 2>/dev/null
 ```
 
 ---
 
-## STEP 3 — Read HTTP Layer (if present)
+## STEP 4 — Read HTTP Layer (if present)
 
 ```bash
 find . -not -path './.git/*' -not -path './.venv/*' \
-  \( -path "*/router*" -o -path "*/route*" \
-  -o -path "*/controller*" -o -path "*/handler*" \) \
-  | grep -v node_modules | grep -E "\.(py|ts|js|java|go|rb)$" | head -10
+  \( -path "*/router*" -o -path "*/route*" -o -path "*/controller*" -o -path "*/handler*" \) \
+  | grep -E "\.(py|ts|js|java|go|rb)$" | grep -v node_modules | head -10
 ```
 
 If found, read 2–3 files and extract:
-- Route definition pattern (decorators, `router.get(...)`, `@GetMapping`, etc.)
-- HTTP error handling pattern (how 404/400/500 are returned)
-- Success response shape (Pydantic model, DTO, plain object)
+- Route definition pattern
+- HTTP error handling pattern (how 404/400 are returned)
+- Success response shape
 
-If NOT found, record: "No HTTP layer detected — likely backend or library feature."
+If NOT found: record "No HTTP layer — backend/data/pipeline feature."
 
 ---
 
-## STEP 4 — Read Backend Layer (if present)
+## STEP 5 — Read Backend / Pipeline Layer (if present)
 
 ```bash
 find . -not -path './.git/*' -not -path './.venv/*' \
   \( -path "*/task*" -o -path "*/job*" -o -path "*/worker*" \
-  -o -path "*/consumer*" -o -path "*/pipeline*" -o -path "*/processor*" \
-  -o -path "*/queue*" -o -path "*/scheduler*" -o -path "*/cron*" \) \
-  | grep -E "\.(py|ts|js|java|go|rb)$" | grep -v node_modules | head -10
+  -o -path "*/pipeline*" -o -path "*/dag*" -o -path "*/transform*" \
+  -o -path "*/models*" -o -path "*/consumer*" -o -path "*/processor*" \) \
+  | grep -E "\.(py|ts|js|java|go|sql|yml)$" | grep -v node_modules | head -10
 ```
 
 If found, read those files and extract:
-- Task/job definition pattern
-- How tasks are triggered (HTTP call, schedule, event, message)
-- What the task does (writes to DB, sends email, processes file, publishes event)
+- Job/pipeline/DAG definition pattern
+- Trigger mechanism (HTTP call, cron, event, message, manual)
+- What it does (writes to DB, transforms data, trains model, sends email)
+- Data platform operations (SQL queries, Delta writes, dbt runs, Snowflake loads)
 - Retry and error handling pattern
-
-If NOT found, record: "No background job layer detected."
 
 ---
 
-## STEP 5 — Read Existing Tests
+## STEP 6 — Read Existing Tests
 
 ```bash
 find . -not -path './.git/*' -not -path './.venv/*' \
   -type f \( -name "test_*.py" -o -name "*_test.py" \
   -o -name "*.test.ts" -o -name "*.spec.ts" \
-  -o -name "*.test.js" -o -name "*.spec.js" \
-  -o -name "*Test.java" -o -name "*_test.go" \) \
+  -o -name "*.test.js" -o -name "*Test.java" -o -name "*_test.go" \) \
   | grep -v node_modules | head -20
 ```
 
 Read existing test files and extract:
-- HTTP integration test setup (TestClient, supertest, MockMvc, httptest, etc.)
-- Backend/job test setup (mock task runner, test message queue, in-memory broker, etc.)
-- Fixture/setup pattern
-- Assertion style
+- HTTP test setup pattern (TestClient, supertest, MockMvc, etc.)
+- Data platform test setup (SparkSession, Snowflake test DB, dbt test profiles, etc.)
+- Backend/job test setup (mock broker, in-memory queue, test scheduler, etc.)
+- Fixture/setup pattern and assertion style
 
 ---
 
-## STEP 6 — Resolve Commands
+## STEP 7 — Resolve Commands
 
-Based on detected stack:
-
-**Python:**
+### Python
 ```
 install:        pip install -r requirements.txt
 test:           pytest {test_dir}/ -v
 test_coverage:  pytest {test_dir}/ -v --cov={src_dir} --cov-report=term-missing --cov-fail-under=90
 collect_tests:  pytest {test_dir}/ --collect-only -q
-run_api:        uvicorn {module}:app --reload --port 8000   [if FastAPI/Flask present]
-run_worker:     celery -A {module} worker --loglevel=info   [if Celery present]
-                python {worker_file}.py                     [if simple worker]
-                rq worker                                   [if RQ present]
-lint:           flake8 {src_dir}/ {test_dir}/ --max-line-length=88
+run_api:        uvicorn {module}:app --reload --port 8000   [FastAPI/Flask — else N/A]
+run_worker:     celery -A {module} worker --loglevel=info   [Celery]
+                rq worker                                   [RQ]
+                python {worker_file}.py                     [plain worker]
 ```
 
-**Node / TypeScript:**
+### dbt
+```
+install:        pip install dbt-{adapter}
+test:           dbt test --profiles-dir {profiles_dir}
+run_pipeline:   dbt run --profiles-dir {profiles_dir}
+run_full:       dbt build --profiles-dir {profiles_dir}   [run + test in one]
+```
+
+### Databricks
+```
+run_pipeline:   databricks pipelines start --pipeline-id {id}   [DLT]
+run_job:        databricks jobs run-now --job-id {id}
+```
+
+### Airflow
+```
+run_dag:        airflow dags trigger {dag_id}
+test_task:      airflow tasks test {dag_id} {task_id} {execution_date}
+```
+
+### Node / TypeScript
 ```
 install:        npm install
 test:           npm test
 test_coverage:  npm test -- --coverage
-collect_tests:  npm test -- --listTests
-run_api:        npm start  |  npm run dev
-run_worker:     npm run worker  |  node worker.js
-lint:           npm run lint
+run_api:        npm start
+run_worker:     npm run worker
 ```
 
-**Java / Maven:**
-```
-install:        mvn install -DskipTests
-test:           mvn test
-test_coverage:  mvn verify
-run_api:        mvn spring-boot:run
-run_worker:     mvn exec:java -Dexec.mainClass="{WorkerClass}"
-lint:           mvn checkstyle:check
-```
+---
 
-**Go:**
-```
-install:        go mod download
-test:           go test ./... -v
-test_coverage:  go test ./... -cover -coverprofile=coverage.out
-collect_tests:  go test ./... -list '.*'
-run_api:        go run {entry}.go
-run_worker:     go run {worker}.go
-lint:           golangci-lint run
-```
+## STEP 8 — Derive Validation Strategy
+
+Based on detected stack, determine how E2E validation works for this feature:
+
+| Detected stack | Validation method |
+|---|---|
+| HTTP framework present | HTTP curl — call endpoints, assert responses |
+| Snowflake | SQL query — connect and assert row counts / values in target tables |
+| Delta Lake / Databricks | Spark read — load Delta table, assert schema and row counts |
+| dbt | `dbt test` — run dbt tests against target schema, assert pass |
+| Airflow | Check DAG run status — trigger DAG, poll until success, assert task states |
+| MLflow | Check experiment — assert run logged metrics, model registered in registry |
+| Plain Python job | Run function directly — assert return value and side effects |
 
 ---
 
@@ -184,21 +258,23 @@ Jira: {jira_id}
 Auto-detected — no manual config
 
 ## Stack
-- Language:            {detected}
-- Version:             {detected}
-- Web framework:       {detected | none}
-- Background framework:{detected | none}
-- Message queue:       {detected | none}
-- Database/ORM:        {detected | none}
-- Test framework:      {detected}
-- Package manager:     {detected}
+- Language:              {detected}
+- Version:               {detected}
+- HTTP framework:        {detected | none}
+- Data platform:         {detected | none}   e.g. Snowflake / Databricks / BigQuery / PostgreSQL
+- Pipeline framework:    {detected | none}   e.g. dbt / Airflow / DLT / Prefect
+- ML framework:          {detected | none}   e.g. MLflow / scikit-learn
+- Background framework:  {detected | none}   e.g. Celery / RQ
+- Test framework:        {detected}
+- Package manager:       {detected}
 
 ## Paths
-- src_dir:         {detected}
-- test_dir:        {detected}
-- http_entry:      {e.g. src/main.py | none}
-- worker_entry:    {e.g. src/worker.py | none}
-- dependency_file: {detected}
+- src_dir:           {detected}
+- test_dir:          {detected}
+- http_entry:        {e.g. src/main.py | N/A}
+- worker_entry:      {e.g. src/worker.py | N/A}
+- pipeline_entry:    {e.g. dags/my_dag.py | pipelines/etl.py | N/A}
+- dependency_file:   {detected}
 
 ## Commands
 All agents use these. Never hardcode alternatives.
@@ -207,33 +283,38 @@ All agents use these. Never hardcode alternatives.
   test:           {exact}
   test_coverage:  {exact}
   collect_tests:  {exact}
-  run_api:        {exact | N/A if no HTTP layer}
-  run_worker:     {exact | N/A if no background layer}
+  run_api:        {exact | N/A}
+  run_worker:     {exact | N/A}
+  run_pipeline:   {exact | N/A}
   lint:           {exact}
 
 ## HTTP Integration Test Pattern
-{paste if HTTP layer detected, otherwise: "N/A — no HTTP layer"}
+{if HTTP layer detected — otherwise: "N/A"}
 
-  Setup/Fixture:
-  {exact code}
-
-  HTTP Call:
-  {exact code}
-
-  Assertion:
-  {exact code}
+  Setup/Fixture:  {exact code}
+  HTTP Call:      {exact code}
+  Assertion:      {exact code}
 
 ## Backend / Job Test Pattern
-{paste if background layer detected, otherwise: "N/A — no background layer"}
+{if background job detected — otherwise: "N/A"}
 
-  Setup:
-  {how to initialize a test job runner, mock queue, or in-memory broker}
+  Setup:          {exact code — mock broker, in-memory queue, etc.}
+  Invoke:         {exact code — how to trigger the job in a test}
+  Assert:         {exact code — how to verify side effects}
 
-  Invoke:
-  {how to trigger the job/task in a test}
+## Data Platform Test Pattern
+{if data platform detected — otherwise: "N/A"}
 
-  Assert side effects:
-  {how to verify the job completed — DB state, message published, file written}
+  Setup:          {exact code — SparkSession / Snowflake test DB / dbt profiles / etc.}
+  Read/Query:     {exact code — how to read results in a test}
+  Assert:         {exact code — assertDataFrameEqual / row count / schema check}
+
+## Validation Strategy
+{derived from detected stack — used by E2E Validator}
+
+  method:         {http | snowflake-sql | delta-spark | dbt-test | airflow-dag | mlflow | python-direct}
+  how_to_validate: {one paragraph describing exactly how to validate this feature end-to-end}
+  connection:     {env var or config needed — e.g. SNOWFLAKE_ACCOUNT, DATABRICKS_HOST}
 
 ## Project Structure
 {directory tree with purpose of each folder}
@@ -241,24 +322,24 @@ All agents use these. Never hardcode alternatives.
 ## Existing Patterns
 
 ### HTTP Route Definition
-{real example or "N/A"}
+{real example | N/A}
 
 ### HTTP Error Handling
-{real example or "N/A"}
+{real example | N/A}
 
-### HTTP Success Response Shape
-{real example or "N/A"}
+### Data Platform Write
+{real example — Delta write, Snowflake INSERT, dbt model | N/A}
 
 ### Background Job / Task Definition
-{real example or "N/A"}
+{real example | N/A}
 
 ### Job Error / Retry Handling
-{real example or "N/A"}
+{real example | N/A}
 
 ## Git Conventions
 - Branch style: {from git log}
 - Commit style: {from git log}
 
 ## Notes for Upcoming Feature
-{what the new feature needs to plug into — both HTTP and backend layers if combined}
+{what the new feature needs to plug into — all relevant layers}
 ```
