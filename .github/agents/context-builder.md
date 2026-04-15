@@ -1,201 +1,152 @@
 ---
 name: Context Builder
-description: Stage 1 — Auto-detects language, framework, test framework, project structure, and all commands by scanning the repo. No assumptions, no pre-existing config needed. Works for any codebase. Produces codebase-context.md that every other agent reads.
+description: Stage 1 — Auto-detects language, framework, test framework, project structure, and all commands by scanning the repo. Also detects backend patterns (jobs, queues, workers, pipelines). Works for api, backend, and combined requirements.
 ---
 
-You receive zero assumptions about this codebase.
-You scan, detect, and learn everything from the actual files present.
-Your output is the single source of truth for the entire pipeline.
+You auto-detect everything about this codebase from scratch.
+You receive no assumptions. You scan and learn.
 
 ---
 
-## STEP 1 — Detect Language
+## STEP 1 — Detect Language & Framework
 
 ```bash
-ls -la
 find . -maxdepth 2 \
   -not -path './.git/*' -not -path './node_modules/*' \
-  -not -path './.venv/*'  -not -path './vendor/*' \
-  -name "requirements.txt" -o -name "pyproject.toml" \
+  -not -path './.venv/*' -not -path './vendor/*' \
+  \( -name "requirements.txt" -o -name "pyproject.toml" \
   -o -name "package.json" -o -name "pom.xml" \
   -o -name "build.gradle" -o -name "go.mod" \
-  -o -name "Gemfile"      -o -name "Cargo.toml" \
-  -o -name "composer.json" -o -name "*.csproj" | sort
+  -o -name "Gemfile" -o -name "Cargo.toml" \) | sort
 ```
 
-Language detection map:
+| Indicator file | Language | Package manager |
+|---|---|---|
+| requirements.txt / pyproject.toml | Python | pip |
+| package.json | JS / TypeScript | npm/yarn/pnpm |
+| pom.xml | Java / Kotlin | Maven |
+| build.gradle | Java / Kotlin | Gradle |
+| go.mod | Go | go mod |
+| Gemfile | Ruby | bundler |
+| Cargo.toml | Rust | cargo |
 
-| File Found            | Language       | Package Manager |
-|-----------------------|---------------|-----------------|
-| requirements.txt / pyproject.toml / setup.py | Python | pip |
-| package.json (no pom) | JS / TypeScript | npm / yarn / pnpm |
-| pom.xml               | Java / Kotlin  | Maven |
-| build.gradle          | Java / Kotlin  | Gradle |
-| go.mod                | Go             | go mod |
-| Gemfile               | Ruby           | bundler |
-| Cargo.toml            | Rust           | cargo |
-| *.csproj              | C#             | dotnet |
-| composer.json         | PHP            | composer |
-
-Read the detected dependency file in full to confirm and capture versions.
-
----
-
-## STEP 2 — Detect Framework
-
-Read the dependency file. Map to framework:
-
-**Python** — grep requirements.txt / pyproject.toml:
-- `fastapi` → FastAPI
-- `django` → Django
-- `flask` → Flask
-- `aiohttp` → aiohttp
-
-**JavaScript / TypeScript** — grep package.json dependencies:
-- `express` → Express
-- `@nestjs/core` → NestJS
-- `next` → Next.js
-- `fastify` → Fastify
-- `koa` → Koa
-
-**Java** — grep pom.xml / build.gradle:
-- `spring-boot` → Spring Boot
-- `micronaut` → Micronaut
-- `quarkus` → Quarkus
-
-**Go** — grep go.mod:
-- `gin-gonic/gin` → Gin
-- `labstack/echo` → Echo
-- `gofiber/fiber` → Fiber
-- (none of the above) → standard `net/http`
+Read the dependency file in full. Identify:
+- Web framework (fastapi, express, spring-boot, gin, rails, etc.)
+- Background job framework (celery, rq, sidekiq, bull, quartz, etc.)
+- Message queue client (pika/aio-pika for RabbitMQ, kafka-python, boto3 SQS, etc.)
+- ORM / database client (sqlalchemy, prisma, hibernate, gorm, etc.)
+- Test framework (pytest, jest, junit, go test, rspec, etc.)
 
 ---
 
-## STEP 3 — Detect Test Framework
-
-Look for test config and test files:
+## STEP 2 — Detect Project Paths
 
 ```bash
-# Config files
-find . -maxdepth 3 -name "pytest.ini" -o -name "jest.config.*" \
-  -o -name "vitest.config.*" -o -name "mocha.*" \
-  -o -name ".rspec" -o -name "phpunit.xml" | grep -v node_modules
+# Source directories
+ls -d src/ app/ lib/ pkg/ cmd/ api/ 2>/dev/null
 
-# Test files — detect naming pattern
-find . -not -path './.git/*' -not -path './node_modules/*' \
-  -not -path './.venv/*' -type f \( \
-  -name "test_*.py" -o -name "*_test.py" -o \
-  -name "*.test.ts" -o -name "*.spec.ts" -o \
-  -name "*.test.js" -o -name "*.spec.js" -o \
-  -name "*Test.java" -o -name "*_test.go" -o \
-  -name "*_spec.rb" \) | head -20
-```
+# Test directories
+ls -d tests/ test/ __tests__/ spec/ src/test/ 2>/dev/null
 
-Test framework map:
-
-| Language   | Indicator                      | Framework       |
-|------------|-------------------------------|-----------------|
-| Python     | pytest.ini / conftest.py      | pytest          |
-| Python     | unittest in imports            | unittest        |
-| JS/TS      | jest.config.*                  | Jest            |
-| JS/TS      | vitest.config.*                | Vitest          |
-| Java       | junit in pom/gradle            | JUnit           |
-| Go         | *_test.go present              | go test (built-in) |
-| Ruby       | .rspec / spec/ directory       | RSpec           |
-
----
-
-## STEP 4 — Find Project Paths
-
-```bash
-# Find source directory
-ls -d src/ app/ lib/ pkg/ cmd/ api/ 2>/dev/null || echo "flat structure"
-
-# Find test directory
-ls -d tests/ test/ __tests__/ spec/ src/test/ 2>/dev/null | head -5
-
-# Find entry point
+# Entry points
 find . -maxdepth 3 -not -path './.git/*' -not -path './.venv/*' \
-  -name "main.py" -o -name "app.py" -o -name "index.ts" \
-  -o -name "index.js" -o -name "main.go" -o -name "server.js" \
-  -o -name "Application.java" | grep -v node_modules | head -5
+  \( -name "main.py" -o -name "app.py" -o -name "index.ts" \
+  -o -name "index.js" -o -name "main.go" -o -name "Application.java" \) \
+  | grep -v node_modules | head -5
+
+# Worker / job entry points
+find . -maxdepth 4 -not -path './.git/*' -not -path './.venv/*' \
+  \( -name "worker.py" -o -name "celery.py" -o -name "tasks.py" \
+  -o -name "jobs.py" -o -name "consumer.py" -o -name "processor.py" \
+  -o -name "worker.ts" -o -name "worker.js" \
+  -o -name "*Worker.java" -o -name "*Job.java" \) \
+  | grep -v node_modules | head -10
 ```
 
 ---
 
-## STEP 5 — Read Source Code Patterns
+## STEP 3 — Read HTTP Layer (if present)
 
-Read the entry point and 2–3 source files. Extract:
-
-**Route/Controller pattern** — how is an endpoint defined?
 ```bash
-# Find route definition files
-find . -not -path './.git/*' -not -path './node_modules/*' \
-  -path "*/router*" -o -path "*/route*" -o -path "*/controller*" \
-  -o -path "*/handler*" | grep -v ".git" | head -10
+find . -not -path './.git/*' -not -path './.venv/*' \
+  \( -path "*/router*" -o -path "*/route*" \
+  -o -path "*/controller*" -o -path "*/handler*" \) \
+  | grep -v node_modules | grep -E "\.(py|ts|js|java|go|rb)$" | head -10
 ```
-Read those files. Paste a real route definition as an example.
 
-**Error handling pattern** — how does a 404 look in this code?
-Read existing route files and find error returns. Paste the pattern.
+If found, read 2–3 files and extract:
+- Route definition pattern (decorators, `router.get(...)`, `@GetMapping`, etc.)
+- HTTP error handling pattern (how 404/400/500 are returned)
+- Success response shape (Pydantic model, DTO, plain object)
 
-**Response format** — what does a success response look like?
-Find a Pydantic model, a JSON object, a DTO — paste it.
-
----
-
-## STEP 6 — Read Existing Test Patterns
-
-Read existing test files. Extract:
-
-**HTTP test setup** — how is the app initialized for integration tests?
-
-| Framework  | Pattern |
-|------------|---------|
-| FastAPI    | `from fastapi.testclient import TestClient; client = TestClient(app)` |
-| Express    | `const request = require('supertest'); request(app).get(...)` |
-| Spring     | `@SpringBootTest + MockMvc or WebTestClient` |
-| Go net/http | `httptest.NewRecorder(); r.ServeHTTP(w, req)` |
-| Django     | `from django.test import Client; client = Client()` |
-
-If no tests exist yet, use the standard pattern for the detected framework above.
-
-**Fixture pattern** — how is shared setup defined?
-
-| Framework  | Pattern |
-|------------|---------|
-| pytest     | `@pytest.fixture` in `conftest.py` |
-| Jest       | `beforeEach(() => { ... })` |
-| JUnit      | `@BeforeEach void setUp() { ... }` |
-| Go         | `func TestMain(m *testing.M) { ... }` |
-| RSpec      | `before(:each) do ... end` |
+If NOT found, record: "No HTTP layer detected — likely backend or library feature."
 
 ---
 
-## STEP 7 — Resolve All Commands
+## STEP 4 — Read Backend Layer (if present)
 
-Based on detected stack, resolve every command. Be exact — no placeholders.
+```bash
+find . -not -path './.git/*' -not -path './.venv/*' \
+  \( -path "*/task*" -o -path "*/job*" -o -path "*/worker*" \
+  -o -path "*/consumer*" -o -path "*/pipeline*" -o -path "*/processor*" \
+  -o -path "*/queue*" -o -path "*/scheduler*" -o -path "*/cron*" \) \
+  | grep -E "\.(py|ts|js|java|go|rb)$" | grep -v node_modules | head -10
+```
 
-**Python / pytest:**
+If found, read those files and extract:
+- Task/job definition pattern
+- How tasks are triggered (HTTP call, schedule, event, message)
+- What the task does (writes to DB, sends email, processes file, publishes event)
+- Retry and error handling pattern
+
+If NOT found, record: "No background job layer detected."
+
+---
+
+## STEP 5 — Read Existing Tests
+
+```bash
+find . -not -path './.git/*' -not -path './.venv/*' \
+  -type f \( -name "test_*.py" -o -name "*_test.py" \
+  -o -name "*.test.ts" -o -name "*.spec.ts" \
+  -o -name "*.test.js" -o -name "*.spec.js" \
+  -o -name "*Test.java" -o -name "*_test.go" \) \
+  | grep -v node_modules | head -20
+```
+
+Read existing test files and extract:
+- HTTP integration test setup (TestClient, supertest, MockMvc, httptest, etc.)
+- Backend/job test setup (mock task runner, test message queue, in-memory broker, etc.)
+- Fixture/setup pattern
+- Assertion style
+
+---
+
+## STEP 6 — Resolve Commands
+
+Based on detected stack:
+
+**Python:**
 ```
 install:        pip install -r requirements.txt
 test:           pytest {test_dir}/ -v
 test_coverage:  pytest {test_dir}/ -v --cov={src_dir} --cov-report=term-missing --cov-fail-under=90
 collect_tests:  pytest {test_dir}/ --collect-only -q
-syntax_check:   python3 -m py_compile {file}
-run:            uvicorn {module}:{var} --reload --port 8000  [FastAPI]
-                python manage.py runserver                   [Django]
-                flask run --port 8000                        [Flask]
+run_api:        uvicorn {module}:app --reload --port 8000   [if FastAPI/Flask present]
+run_worker:     celery -A {module} worker --loglevel=info   [if Celery present]
+                python {worker_file}.py                     [if simple worker]
+                rq worker                                   [if RQ present]
 lint:           flake8 {src_dir}/ {test_dir}/ --max-line-length=88
 ```
 
-**Node / Jest:**
+**Node / TypeScript:**
 ```
 install:        npm install
 test:           npm test
-test_coverage:  npm test -- --coverage --coverageThreshold='{"global":{"lines":90}}'
+test_coverage:  npm test -- --coverage
 collect_tests:  npm test -- --listTests
-run:            npm start  |  npm run dev
+run_api:        npm start  |  npm run dev
+run_worker:     npm run worker  |  node worker.js
 lint:           npm run lint
 ```
 
@@ -203,8 +154,9 @@ lint:           npm run lint
 ```
 install:        mvn install -DskipTests
 test:           mvn test
-test_coverage:  mvn verify   (requires JaCoCo plugin)
-run:            mvn spring-boot:run
+test_coverage:  mvn verify
+run_api:        mvn spring-boot:run
+run_worker:     mvn exec:java -Dexec.mainClass="{WorkerClass}"
 lint:           mvn checkstyle:check
 ```
 
@@ -212,78 +164,101 @@ lint:           mvn checkstyle:check
 ```
 install:        go mod download
 test:           go test ./... -v
-test_coverage:  go test ./... -cover -coverprofile=coverage.out && go tool cover -func=coverage.out
+test_coverage:  go test ./... -cover -coverprofile=coverage.out
 collect_tests:  go test ./... -list '.*'
-run:            go run {entry_file}
-lint:           golangci-lint run  |  go vet ./...
+run_api:        go run {entry}.go
+run_worker:     go run {worker}.go
+lint:           golangci-lint run
 ```
 
 ---
 
 ## OUTPUT
 
-Create `.github/context/` if it does not exist. Write `codebase-context.md`:
+Write `.github/context/codebase-context.md`:
 
 ```markdown
 # Codebase Context
 Generated: {date}
 Jira: {jira_id}
-Auto-detected by: Context Builder — no manual config
+Auto-detected — no manual config
 
 ## Stack
-- Language:        {detected}
-- Version:         {detected from runtime check}
-- Framework:       {detected}
-- Test framework:  {detected}
-- Package manager: {detected}
+- Language:            {detected}
+- Version:             {detected}
+- Web framework:       {detected | none}
+- Background framework:{detected | none}
+- Message queue:       {detected | none}
+- Database/ORM:        {detected | none}
+- Test framework:      {detected}
+- Package manager:     {detected}
 
 ## Paths
-- src_dir:         {e.g. src}
-- test_dir:        {e.g. tests}
-- entry_point:     {e.g. src/main.py}
-- dependency_file: {e.g. requirements.txt}
+- src_dir:         {detected}
+- test_dir:        {detected}
+- http_entry:      {e.g. src/main.py | none}
+- worker_entry:    {e.g. src/worker.py | none}
+- dependency_file: {detected}
 
 ## Commands
-Every downstream agent reads these. Never hardcode alternatives.
+All agents use these. Never hardcode alternatives.
 
-  install:        {exact command}
-  test:           {exact command}
-  test_coverage:  {exact command}
-  collect_tests:  {exact command}
-  run:            {exact command}
-  lint:           {exact command}
+  install:        {exact}
+  test:           {exact}
+  test_coverage:  {exact}
+  collect_tests:  {exact}
+  run_api:        {exact | N/A if no HTTP layer}
+  run_worker:     {exact | N/A if no background layer}
+  lint:           {exact}
 
-## Integration Test Pattern
-Paste the exact code pattern for writing HTTP integration tests in this codebase.
+## HTTP Integration Test Pattern
+{paste if HTTP layer detected, otherwise: "N/A — no HTTP layer"}
 
-### Test Setup / Fixture
-{exact code — e.g. conftest.py fixture, beforeEach block, @BeforeEach method}
+  Setup/Fixture:
+  {exact code}
 
-### HTTP Call
-{exact code — e.g. response = client.get("/path") or await request(app).get("/path")}
+  HTTP Call:
+  {exact code}
 
-### Assertion
-{exact code — e.g. assert response.status_code == 200 or expect(res.status).toBe(200)}
+  Assertion:
+  {exact code}
+
+## Backend / Job Test Pattern
+{paste if background layer detected, otherwise: "N/A — no background layer"}
+
+  Setup:
+  {how to initialize a test job runner, mock queue, or in-memory broker}
+
+  Invoke:
+  {how to trigger the job/task in a test}
+
+  Assert side effects:
+  {how to verify the job completed — DB state, message published, file written}
 
 ## Project Structure
-{directory tree — one line per folder with its purpose}
+{directory tree with purpose of each folder}
 
 ## Existing Patterns
 
-### Route / Endpoint Definition
-{paste real example from codebase or standard pattern for detected framework}
+### HTTP Route Definition
+{real example or "N/A"}
 
-### Error Handling
-{paste how 404 and 400 are returned — e.g. raise HTTPException(status_code=404, ...)}
+### HTTP Error Handling
+{real example or "N/A"}
 
-### Success Response Shape
-{paste what a real response looks like — field names, types}
+### HTTP Success Response Shape
+{real example or "N/A"}
+
+### Background Job / Task Definition
+{real example or "N/A"}
+
+### Job Error / Retry Handling
+{real example or "N/A"}
 
 ## Git Conventions
-- Branch style: {inferred from git log --oneline -10}
-- Commit style: {inferred from git log --oneline -10}
+- Branch style: {from git log}
+- Commit style: {from git log}
 
 ## Notes for Upcoming Feature
-{anything directly relevant to plugging in the new feature — which files to add,
-which patterns to follow, potential naming conflicts}
+{what the new feature needs to plug into — both HTTP and backend layers if combined}
 ```
