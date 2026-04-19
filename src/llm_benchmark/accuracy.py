@@ -1,34 +1,29 @@
-"""Accuracy scoring for LLM responses against ground-truth prompts."""
+"""
+Accuracy scoring — delegates to each prompt's own validator function.
+Returns (label, score, detail) so the report can show why a score was given.
+"""
 
 from __future__ import annotations
 
 
-def score_response(response_text: str, prompt_spec: dict) -> tuple[str, float]:
+def score_response(
+    response_text: str,
+    prompt_spec: dict,
+) -> tuple[str, float, str]:
     """
-    Returns (label, score_0_to_1).
-
-    Scoring tiers:
-      - exact_answer match  → "Excellent" / 1.0
-      - all keywords found  → "Good"      / 0.75
-      - some keywords found → "Partial"   / 0.40
-      - no keywords found   → "Poor"      / 0.10
+    Call the prompt's validator and return (label, score, detail).
+    Falls back gracefully if no validator is defined.
     """
-    text = response_text.lower().strip()
-    exact = prompt_spec.get("exact_answer")
-    keywords: list[str] = [k.lower() for k in prompt_spec.get("expected_keywords", [])]
+    validator = prompt_spec.get("validator")
+    if callable(validator):
+        try:
+            result = validator(response_text)
+            # Support both 2-tuple (label, score) and 3-tuple (label, score, detail)
+            if len(result) == 3:
+                return result
+            label, score = result
+            return label, score, ""
+        except Exception as exc:
+            return "Error", 0.0, f"Validator raised: {exc}"
 
-    if exact and exact.lower() in text:
-        return "Excellent", 1.0
-
-    if not keywords:
-        return "Unknown", 0.5
-
-    matched = sum(1 for kw in keywords if kw in text)
-    ratio = matched / len(keywords)
-
-    if ratio == 1.0:
-        return "Good", 0.75
-    elif ratio >= 0.5:
-        return "Partial", 0.40
-    else:
-        return "Poor", 0.10
+    return "Unknown", 0.5, "No validator defined"

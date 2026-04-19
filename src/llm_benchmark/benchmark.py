@@ -38,6 +38,7 @@ class ModelResult:
     response_time_sec: float
     accuracy_label: str
     accuracy_score: float
+    accuracy_detail: str = ""
     error: Optional[str] = None
 
 
@@ -85,10 +86,11 @@ def run_single(
     ai_cost = 0.0
     accuracy_label = "N/A"
     accuracy_score = 0.0
+    accuracy_detail = ""
+    start = time.perf_counter()
     elapsed = 0.0
 
     try:
-        start = time.perf_counter()
         response = client.chat.completions.create(
             model=model_id,
             messages=[{"role": "user", "content": prompt_text}],
@@ -104,11 +106,13 @@ def run_single(
         total_tokens = usage.total_tokens if usage else 0
 
         ai_cost = _calculate_cost(model_id, input_tokens, output_tokens)
-        accuracy_label, accuracy_score = score_response(response_text, prompt_spec)
+        accuracy_label, accuracy_score, accuracy_detail = score_response(
+            response_text, prompt_spec
+        )
 
     except Exception as exc:  # noqa: BLE001
         error = str(exc)
-        elapsed = round(time.perf_counter() - start, 3) if elapsed == 0 else elapsed
+        elapsed = round(time.perf_counter() - start, 3)
 
     return ModelResult(
         model_display_name=model_cfg["display_name"],
@@ -124,6 +128,7 @@ def run_single(
         response_time_sec=elapsed,
         accuracy_label=accuracy_label,
         accuracy_score=accuracy_score,
+        accuracy_detail=accuracy_detail,
         error=error,
     )
 
