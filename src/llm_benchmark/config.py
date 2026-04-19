@@ -37,15 +37,30 @@ MODELS = [
     },
     # ── Google ───────────────────────────────────────────────────
     {
-        "model_id": "google/gemini-1.5-pro",
-        "display_name": "Gemini 1.5 Pro",
+        "model_id": "google/gemini-2.5-pro",
+        "display_name": "Gemini 2.5 Pro",
         "provider": "google",
-        "input_price_per_1m": 1.25,
-        "output_price_per_1m": 5.00,
+        "input_price_per_1m": 1.25,   # ≤200k context window
+        "output_price_per_1m": 10.00,
+    },
+    {
+        "model_id": "google/gemini-2.0-flash",
+        "display_name": "Gemini 2.0 Flash",
+        "provider": "google",
+        "input_price_per_1m": 0.10,
+        "output_price_per_1m": 0.40,
+    },
+    # Legacy — kept for reference only
+    {
+        "model_id": "google/gemini-1.5-pro",
+        "display_name": "Gemini 1.5 Pro (legacy)",
+        "provider": "google",
+        "input_price_per_1m": 2.50,   # corrected from 1.25
+        "output_price_per_1m": 10.00,
     },
     {
         "model_id": "google/gemini-1.5-flash",
-        "display_name": "Gemini 1.5 Flash",
+        "display_name": "Gemini 1.5 Flash (legacy)",
         "provider": "google",
         "input_price_per_1m": 0.075,
         "output_price_per_1m": 0.30,
