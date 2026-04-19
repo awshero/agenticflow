@@ -116,10 +116,19 @@ def print_detail_table(results: list["ModelResult"]) -> None:
     print()
 
 
+def _pct_diff(value: float, mean: float) -> str:
+    """Format % difference from mean. Positive = above mean, negative = below."""
+    if mean == 0:
+        return "N/A"
+    diff = ((value - mean) / mean) * 100
+    sign = "+" if diff >= 0 else ""
+    return f"{sign}{diff:.1f}%"
+
+
 def print_summary_table(results: list["ModelResult"]) -> None:
     """
-    Aggregated per-model summary:
-      avg tokens, total cost, avg response time, avg accuracy score.
+    Aggregated per-model summary with % difference from mean for
+    accuracy, cost, and response time.
     """
     from collections import defaultdict
 
@@ -144,34 +153,56 @@ def print_summary_table(results: list["ModelResult"]) -> None:
         a["total_time"] += r.response_time_sec
         a["total_accuracy"] += r.accuracy_score
 
+    # Compute per-model averages first, then derive means
+    aggregated = []
+    for a in agg.values():
+        calls = a["calls"] or 1
+        aggregated.append({
+            "display":      a["display"],
+            "calls":        a["calls"],
+            "errors":       a["errors"],
+            "avg_tokens":   a["total_tokens"] / calls,
+            "total_cost":   a["total_cost"],
+            "avg_time":     a["total_time"] / calls,
+            "avg_accuracy": a["total_accuracy"] / calls,
+        })
+
+    n = len(aggregated) or 1
+    mean_accuracy = sum(x["avg_accuracy"] for x in aggregated) / n
+    mean_cost     = sum(x["total_cost"]   for x in aggregated) / n
+    mean_time     = sum(x["avg_time"]     for x in aggregated) / n
+
     headers = [
         "Model", "Prompts", "Errors",
-        "Avg Tokens", "Total AI Cost",
-        "Avg Time", "Avg Accuracy",
+        "Avg Tokens", "Total AI Cost", "vs Avg Cost",
+        "Avg Time", "vs Avg Time",
+        "Avg Accuracy", "vs Avg Accuracy",
     ]
 
     rows = []
-    for a in agg.values():
-        calls = a["calls"] or 1
+    for x in aggregated:
         rows.append([
-            a["display"],
-            str(a["calls"]),
-            str(a["errors"]),
-            str(round(a["total_tokens"] / calls)),
-            _fmt_cost(a["total_cost"]),
-            _fmt_time(a["total_time"] / calls),
-            f"{a['total_accuracy']/calls:.2f}",
+            x["display"],
+            str(x["calls"]),
+            str(x["errors"]),
+            str(round(x["avg_tokens"])),
+            _fmt_cost(x["total_cost"]),
+            _pct_diff(x["total_cost"],   mean_cost),
+            _fmt_time(x["avg_time"]),
+            _pct_diff(x["avg_time"],     mean_time),
+            f"{x['avg_accuracy']:.2f}",
+            _pct_diff(x["avg_accuracy"], mean_accuracy),
         ])
 
     # sort by avg accuracy desc
-    rows.sort(key=lambda r: float(r[6]), reverse=True)
+    rows.sort(key=lambda r: float(r[8]), reverse=True)
 
     widths = [max(len(h), max((len(row[i]) for row in rows), default=0))
               for i, h in enumerate(headers)]
 
     sep = _divider(widths)
     print("\n" + "=" * (sum(widths) + len(widths) * 3))
-    print("  SUMMARY — aggregated per model (sorted by accuracy)")
+    print("  SUMMARY — aggregated per model  (% diff relative to group mean)")
     print("=" * (sum(widths) + len(widths) * 3))
     print(_row(headers, widths))
     print(sep)
