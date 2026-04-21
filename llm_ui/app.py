@@ -405,127 +405,173 @@ def compute_metrics(raw_results, weights):
     return metrics, ranked
 
 
-# ── Magic Quadrant chart ───────────────────────────────────────────────────────
+# ── Magic Quadrant chart (single graph) ───────────────────────────────────────
 def build_quadrant_figure(metrics, ranked, use_case_name, profile, weights):
     winner = ranked[0]
-    names = list(metrics.keys())
+    names  = list(metrics.keys())
+    wm     = metrics[winner]
 
-    fig, (ax_quad, ax_card) = plt.subplots(
-        1, 2, figsize=(18, 8),
-        gridspec_kw={"width_ratios": [2, 1]},
-    )
+    fig, ax = plt.subplots(figsize=(16, 11))
     fig.patch.set_facecolor("#F4F6F9")
-    fig.suptitle(
-        f"LLM Magic Quadrant — {use_case_name}\n"
-        f"Profile: {profile.replace('_',' ').title()}  "
-        f"(Accuracy {weights['accuracy']:.0%}  ·  Cost {weights['cost']:.0%}  ·  Speed {weights['speed']:.0%})",
-        fontsize=14, fontweight="bold", y=1.02,
-    )
-
-    # ── Quadrant scatter ──────────────────────────────────────────────────────
-    ax = ax_quad
     ax.set_facecolor("#FFFFFF")
-    ax.set_xlim(-0.08, 1.18)
-    ax.set_ylim(-0.08, 1.18)
-    ax.set_xlabel("Performance Score  (Accuracy →)", fontsize=11, labelpad=8)
-    ax.set_ylabel("Value Score  (Cost Efficiency →)", fontsize=11, labelpad=8)
-    ax.set_title("Magic Quadrant", fontsize=12, fontweight="bold", pad=10)
+
+    # ── Axes & grid ───────────────────────────────────────────────────────────
+    ax.set_xlim(-0.06, 1.16)
+    ax.set_ylim(-0.06, 1.22)
+    ax.set_xlabel("Performance Score  (Accuracy  →)", fontsize=12, labelpad=10)
+    ax.set_ylabel("Value Score  (Cost Efficiency  →)", fontsize=12, labelpad=10)
+    ax.set_title(
+        f"LLM Magic Quadrant  —  {use_case_name}\n"
+        f"Profile: {profile.replace('_',' ').title()}    "
+        f"Accuracy {weights['accuracy']:.0%}  ·  Cost {weights['cost']:.0%}  ·  Speed {weights['speed']:.0%}",
+        fontsize=13, fontweight="bold", pad=14,
+    )
     ax.axvline(0.5, color="#BBBBBB", lw=1.5, ls="--", zorder=1)
     ax.axhline(0.5, color="#BBBBBB", lw=1.5, ls="--", zorder=1)
-
-    for (x0, y0, bg, label, tc) in [
-        (0.5, 0.5, "#E8F5E9", "⭐ LEADERS\n(Best overall)",         "#2e7d32"),
-        (0.0, 0.5, "#FFF3E0", "💰 BUDGET OPTIONS\n(Cheap & decent)", "#e65100"),
-        (0.5, 0.0, "#E3F2FD", "🏆 PREMIUM\n(Accurate but costly)",   "#1565c0"),
-        (0.0, 0.0, "#FFEBEE", "⚠️  AVOID\n(Poor value & accuracy)",  "#b71c1c"),
-    ]:
-        ax.add_patch(plt.Rectangle((x0, y0), 0.5, 0.5, color=bg, zorder=0, alpha=0.55))
-        ax.text(x0 + 0.25, y0 + 0.25, label, ha="center", va="center",
-                fontsize=8, color=tc, alpha=0.5, fontweight="bold", linespacing=1.5)
-
-    used_providers = set()
-    for m in names:
-        mx = metrics[m]
-        xv = mx["norm_accuracy"]
-        yv = mx["norm_value"]
-        sp = mx["norm_speed"]
-        color = PROVIDER_COLORS.get(mx["provider"], "#888888")
-        size = 300 + sp * 1200
-        is_w = m == winner
-
-        ax.scatter(xv, yv, s=size, color=color,
-                   edgecolors="#FFD700" if is_w else "white",
-                   linewidths=4 if is_w else 1.5,
-                   zorder=5, alpha=0.92)
-
-        short = m.replace(" Instruct", "").replace(" Maverick", " Mvk")
-        oy = 0.08 if yv < 0.85 else -0.08
-        ax.annotate(
-            ("⭐ " if is_w else "") + short,
-            xy=(xv, yv), xytext=(xv, yv + oy),
-            ha="center", va="center", fontsize=8,
-            fontweight="bold" if is_w else "normal",
-            color="#1a1a2e",
-            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=color, alpha=0.88, lw=1.2),
-        )
-        ax.annotate(
-            f"acc={mx['avg_accuracy']:.2f}\n{mx['avg_time_s']:.2f}s\n${mx['total_cost']:.5f}",
-            xy=(xv, yv), xytext=(xv + 0.03, yv - 0.12),
-            fontsize=6.2, color="#555555", ha="left", va="top",
-            bbox=dict(boxstyle="round,pad=0.2", fc="#F9F9F9", ec="#DDDDDD", alpha=0.8),
-        )
-        used_providers.add(mx["provider"])
-
-    handles = [mpatches.Patch(color=PROVIDER_COLORS[p], label=p) for p in sorted(used_providers)]
-    handles.append(plt.scatter([], [], s=300, c="gray", label="Bubble = Speed"))
-    ax.legend(handles=handles, fontsize=8.5, loc="lower right", framealpha=0.9)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    # ── Scorecard ─────────────────────────────────────────────────────────────
-    ax2 = ax_card
-    ax2.set_facecolor("#FFFFFF")
-    ax2.axis("off")
-    ax2.set_title("Recommendation Scorecard", fontsize=12, fontweight="bold", pad=10)
-    wm = metrics[winner]
+    # ── Quadrant shading & labels ─────────────────────────────────────────────
+    for x0, y0, bg, qlabel, tc in [
+        (0.5, 0.5, "#E8F5E9", "LEADERS\n(Best overall)",        "#2e7d32"),
+        (0.0, 0.5, "#FFF3E0", "BUDGET OPTIONS\n(Cheap & decent)","#e65100"),
+        (0.5, 0.0, "#E3F2FD", "PREMIUM\n(Accurate but costly)",  "#1565c0"),
+        (0.0, 0.0, "#FFEBEE", "AVOID\n(Poor value & quality)",   "#b71c1c"),
+    ]:
+        ax.add_patch(plt.Rectangle((x0, y0), 0.5, 0.5, color=bg, zorder=0, alpha=0.50))
+        ax.text(x0 + 0.25, y0 + 0.25, qlabel, ha="center", va="center",
+                fontsize=9.5, color=tc, alpha=0.40, fontweight="bold", linespacing=1.6)
 
-    ax2.text(0.5, 0.97,
-        f"\n⭐  RECOMMENDED FOR\n\"{use_case_name}\"",
-        ha="center", va="top", fontsize=11, fontweight="bold",
-        color="#2e7d32", transform=ax2.transAxes, linespacing=1.6,
-    )
-    ax2.text(0.5, 0.79, winner,
-        ha="center", va="top", fontsize=15, fontweight="bold",
-        color=PROVIDER_COLORS.get(wm["provider"], "#333"),
-        transform=ax2.transAxes,
-    )
-    ax2.axhline(y=0.0, xmin=0.05, xmax=0.95, color="#CCC", transform=ax2.transAxes)
+    # ── Scatter bubbles ───────────────────────────────────────────────────────
+    used_providers = set()
+    for m in names:
+        mx    = metrics[m]
+        xv    = mx["norm_accuracy"]
+        yv    = mx["norm_value"]
+        sp    = mx["norm_speed"]
+        color = PROVIDER_COLORS.get(mx["provider"], "#888888")
+        size  = 320 + sp * 1400
+        is_w  = (m == winner)
 
-    for i, (lbl, val, color) in enumerate([
-        ("Accuracy Score",   f"{wm['avg_accuracy']:.2f} / 1.00",  "#2e7d32"),
-        ("Avg Response Time",f"{wm['avg_time_s']:.2f}s",           "#1565c0"),
-        ("Total AI Cost",    f"${wm['total_cost']:.6f}",           "#6a1b9a"),
-        ("Composite Score",  f"{wm['composite']:.3f} / 1.000",     "#e65100"),
-        ("Provider",         wm["provider"],                        "#444444"),
-        ("Weight Profile",   profile.replace("_", " ").title(),    "#444444"),
-    ]):
-        y = 0.62 - i * 0.09
-        ax2.text(0.08, y, lbl + ":", ha="left", va="center", fontsize=9.5,
-                 color="#555", transform=ax2.transAxes)
-        ax2.text(0.92, y, val, ha="right", va="center", fontsize=10,
-                 fontweight="bold", color=color, transform=ax2.transAxes)
+        ax.scatter(xv, yv, s=size, color=color,
+                   edgecolors="#FFD700" if is_w else "white",
+                   linewidths=4.5 if is_w else 1.5,
+                   zorder=5, alpha=0.92)
 
-    if len(ranked) > 1:
-        runner = ranked[1]
-        rm = metrics[runner]
-        ax2.text(0.5, 0.05,
-            f"Runner-up: {runner}\nComposite: {rm['composite']:.3f}   "
-            f"Accuracy: {rm['avg_accuracy']:.2f}",
-            ha="center", va="bottom", fontsize=8.5, color="#666",
-            transform=ax2.transAxes, linespacing=1.5,
+        short = m.replace(" Instruct", "").replace(" Maverick", " Mvk")
+        oy    = 0.09 if yv < 0.87 else -0.09
+        ax.annotate(
+            ("* " if is_w else "") + short,
+            xy=(xv, yv), xytext=(xv, yv + oy),
+            ha="center", va="center", fontsize=8.5,
+            fontweight="bold" if is_w else "normal", color="#1a1a2e",
+            bbox=dict(boxstyle="round,pad=0.28", fc="white", ec=color, alpha=0.90, lw=1.3),
         )
+        # Data callout tag
+        ax.annotate(
+            f"acc={mx['avg_accuracy']:.2f}  {mx['avg_time_s']:.1f}s  ${mx['total_cost']:.5f}",
+            xy=(xv, yv), xytext=(xv, yv - 0.12),
+            ha="center", va="top", fontsize=6.8, color="#555555",
+            bbox=dict(boxstyle="round,pad=0.18", fc="#F8F8F8", ec="#DDDDDD", alpha=0.85),
+        )
+        used_providers.add(mx["provider"])
 
-    plt.tight_layout(pad=2)
+    # ── Provider legend (bottom-right) ────────────────────────────────────────
+    handles = [mpatches.Patch(color=PROVIDER_COLORS[p], label=p) for p in sorted(used_providers)]
+    handles.append(plt.scatter([], [], s=260, c="#999", label="Bubble size = Speed"))
+    ax.legend(handles=handles, fontsize=9, loc="lower right",
+              framealpha=0.92, edgecolor="#CCCCCC", title="Provider", title_fontsize=8)
+
+    # ── Embedded scorecard inset (top-left, inside BUDGET quadrant) ───────────
+    inset = ax.inset_axes([0.01, 0.625, 0.285, 0.355])   # [left, bottom, w, h] in axes coords
+    inset.set_facecolor("#FAFFFE")
+    inset.set_xlim(0, 1)
+    inset.set_ylim(0, 1)
+    inset.axis("off")
+    for spine in inset.spines.values():
+        spine.set_visible(True)
+        spine.set_edgecolor("#2e7d32")
+        spine.set_linewidth(1.8)
+
+    win_color = PROVIDER_COLORS.get(wm["provider"], "#333333")
+
+    inset.text(0.5, 0.95, "RECOMMENDED", ha="center", va="top",
+               fontsize=8, fontweight="bold", color="#2e7d32")
+    inset.text(0.5, 0.84, winner, ha="center", va="top",
+               fontsize=10.5, fontweight="bold", color=win_color, linespacing=1.3,
+               wrap=True)
+
+    inset.axhline(0.73, color="#DDDDDD", lw=1)
+
+    rows = [
+        ("Accuracy",    f"{wm['avg_accuracy']:.2f} / 1.00", "#2e7d32"),
+        ("Avg Time",    f"{wm['avg_time_s']:.2f}s",          "#1565c0"),
+        ("Total Cost",  f"${wm['total_cost']:.6f}",          "#6a1b9a"),
+        ("Composite",   f"{wm['composite']:.3f} / 1.000",    "#e65100"),
+        ("Provider",    wm["provider"],                       "#444444"),
+    ]
+    for i, (lbl, val, vc) in enumerate(rows):
+        y = 0.67 - i * 0.135
+        inset.text(0.05, y, lbl + ":", ha="left", va="center", fontsize=7.5, color="#555555")
+        inset.text(0.97, y, val,        ha="right", va="center", fontsize=8,
+                   fontweight="bold", color=vc)
+
+    inset.axhline(0.01, color="#DDDDDD", lw=1)
+
+    # Mini rank list
+    if len(ranked) > 1:
+        inset.text(0.5, -0.04, "Ranking", ha="center", va="top", fontsize=6.5,
+                   color="#888888", transform=inset.transAxes)
+
+    # ── Rank table below the chart ────────────────────────────────────────────
+    mean_acc  = sum(metrics[m]["avg_accuracy"] for m in ranked) / len(ranked)
+    mean_time = sum(metrics[m]["avg_time_s"]   for m in ranked) / len(ranked)
+    mean_cost = sum(metrics[m]["total_cost"]   for m in ranked) / len(ranked)
+
+    def _pct(v, ref):
+        if ref == 0: return "N/A"
+        d = (v - ref) / ref * 100
+        return f"+{d:.0f}%" if d >= 0 else f"{d:.0f}%"
+
+    col_labels = ["#", "Model", "Provider", "Accuracy", "Acc vs Mean",
+                  "Avg Time", "Time vs Mean", "Total Cost", "Cost vs Mean", "Composite"]
+    table_data = []
+    for rank, m in enumerate(ranked, 1):
+        mx = metrics[m]
+        table_data.append([
+            f"#{rank}" + (" *" if m == winner else ""),
+            m, mx["provider"],
+            f"{mx['avg_accuracy']:.2f}",  _pct(mx["avg_accuracy"], mean_acc),
+            f"{mx['avg_time_s']:.2f}s",   _pct(mx["avg_time_s"],   mean_time),
+            f"${mx['total_cost']:.5f}",   _pct(mx["total_cost"],   mean_cost),
+            f"{mx['composite']:.3f}",
+        ])
+
+    tbl = ax.table(
+        cellText=table_data,
+        colLabels=col_labels,
+        bbox=[0.0, -0.30, 1.0, 0.24],   # below the axes
+        cellLoc="center",
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(8)
+
+    # Style header
+    for j in range(len(col_labels)):
+        tbl[0, j].set_facecolor("#2C3E50")
+        tbl[0, j].set_text_props(color="white", fontweight="bold")
+
+    # Style winner row & accuracy colours
+    acc_colors = {"0.90": "#c6efce", "0.80": "#ffeb9c", "0.70": "#ffcc99"}
+    for i, m in enumerate(ranked, 1):
+        acc = metrics[m]["avg_accuracy"]
+        bg  = "#E8F5E9" if m == winner else "white"
+        acc_bg = "#c6efce" if acc >= 0.90 else "#ffeb9c" if acc >= 0.80 else "#ffcc99" if acc >= 0.70 else "#ffc7ce"
+        for j in range(len(col_labels)):
+            tbl[i, j].set_facecolor(bg)
+        tbl[i, 3].set_facecolor(acc_bg)   # accuracy cell
+
+    fig.subplots_adjust(bottom=0.28, top=0.93)
     return fig
 
 
