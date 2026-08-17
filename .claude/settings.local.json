@@ -53,7 +53,13 @@
       "Bash(cp /Users/nagarajumaddikunta/Desktop/test_driven_development/.claude/agents/dashboard-query-generator.md /Users/nagarajumaddikunta/agenticflow/.github/agents/dashboard-query-generator.md)",
       "Bash(mkdir -p /Users/nagarajumaddikunta/agenticflow/.claude/agents)",
       "Bash(cp /Users/nagarajumaddikunta/Desktop/test_driven_development/.claude/agents/db-context-builder.md /Users/nagarajumaddikunta/agenticflow/.claude/agents/db-context-builder.md)",
-      "Bash(cp /Users/nagarajumaddikunta/Desktop/test_driven_development/.claude/agents/dashboard-query-generator.md /Users/nagarajumaddikunta/agenticflow/.claude/agents/dashboard-query-generator.md)"
+      "Bash(cp /Users/nagarajumaddikunta/Desktop/test_driven_development/.claude/agents/dashboard-query-generator.md /Users/nagarajumaddikunta/agenticflow/.claude/agents/dashboard-query-generator.md)",
+      "Bash(find /Users/nagarajumaddikunta/Documents/databricks_cost_optimization -type f | head -50 && echo \"---\" && ls /Users/nagarajumaddikunta/databricks_optimization 2>/dev/null || true)",
+      "Bash(rtk ls *)",
+      "Bash(python3 build_nb.py)",
+      "Bash(python3 -c ' *)",
+      "Bash(rtk git *)",
+      "Bash(git check-ignore *)"
     ]
   }
 }
