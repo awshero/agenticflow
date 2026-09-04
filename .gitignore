@@ -5,3 +5,46 @@ __pycache__/
 htmlcov/
 .coverage
 *.egg-info/
+
+# --- home-directory safety net -------------------------------------------
+# This repo is rooted at $HOME, so its working tree spans the whole home
+# directory. These entries keep credentials, keys and personal data out of
+# reach of an accidental `git add -A`. Additive only: nothing already
+# tracked is affected.
+.ssh/
+.aws/
+.kube/
+.docker/
+.config/
+.gnupg/
+.terraform.d/
+.claude.json
+.claude.json.backup
+.claude/backups/
+.claude/cache/
+.claude/debug/
+.claude/history.jsonl
+.claude/projects/
+.claude/sessions/
+.claude/telemetry/
+.zsh_history
+.zsh_sessions/
+.bash_history
+.python_history
+.viminfo
+.netrc
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials
+Library/
+Documents/
+Downloads/
+Pictures/
+Movies/
+Music/
+Public/
+Applications/
+.Trash/
+.DS_Store
