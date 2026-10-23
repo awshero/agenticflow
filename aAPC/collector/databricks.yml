@@ -1,0 +1,65 @@
+# Standalone bundle for the APC Metrics Collector (SQL only, no Python).
+#
+# This folder is self-contained: copy aAPC/collector/ anywhere and run
+#
+#   databricks bundle deploy -t prod --var="lob=LOB1" --var="warehouse_id=<id>"
+#   databricks bundle run apc_metrics_collector -t prod --var="lob=LOB1"
+#
+# The parent bundle (aAPC/databricks.yml) includes the same job and triggers it
+# from the full pipeline. Deploy one or the other into a workspace, not both.
+bundle:
+  name: apc_metrics_collector
+
+include:
+  - resources/*.yml
+
+variables:
+  lob:
+    description: Line of business this deployment reports for (written to every row).
+    default: dev
+  catalog:
+    description: Unity Catalog catalog that holds the collector tables.
+    default: finops
+  schema:
+    description: Schema that holds apc_metrics_table / apc_cluster_config_history.
+    default: apc_optimizer
+  warehouse_id:
+    description: SQL warehouse that runs the collector.
+  lookback_days:
+    description: Telemetry window in days.
+    default: "30"
+  history_days:
+    description: How far back cluster configuration history is captured.
+    default: "180"
+  idle_cpu_threshold:
+    description: A cluster-minute whose max node CPU% is below this is "idle".
+    default: "10"
+  collector_schedule_pause_status:
+    description: PAUSED in dev and test, UNPAUSED in prod.
+    default: PAUSED
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dev-workspace.cloud.databricks.com
+    variables:
+      catalog: dev_finops
+
+  test:
+    mode: production
+    workspace:
+      host: https://test-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}/${var.lob}
+    variables:
+      catalog: test_finops
+
+  prod:
+    mode: production
+    workspace:
+      host: https://prod-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}/${var.lob}
+    variables:
+      catalog: prod_finops
+      collector_schedule_pause_status: UNPAUSED

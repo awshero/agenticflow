@@ -1,0 +1,67 @@
+resources:
+  jobs:
+    apc_metrics_collector:
+      name: "[${var.lob}] APC metrics collector"
+      description: >
+        SQL-only collector: reads non-billing compute metrics for All-Purpose
+        Clusters from Databricks system tables and MERGEs them into
+        apc_metrics_table and apc_cluster_config_history.
+      tags:
+        app: apc_metrics_collector
+        lob: ${var.lob}
+      schedule:
+        quartz_cron_expression: "0 0 4 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.collector_schedule_pause_status}
+      max_concurrent_runs: 1
+
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: lob
+          default: ${var.lob}
+        - name: lookback_days
+          default: ${var.lookback_days}
+        - name: history_days
+          default: ${var.history_days}
+        - name: idle_cpu_threshold
+          default: ${var.idle_cpu_threshold}
+
+      tasks:
+        - task_key: setup_collector_tables
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../sql/00_setup_collector_tables.sql
+            parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+
+        - task_key: collect_config_history
+          depends_on:
+            - task_key: setup_collector_tables
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../sql/10_config_history.sql
+            parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+              lob: "{{job.parameters.lob}}"
+              history_days: "{{job.parameters.history_days}}"
+
+        - task_key: collect_compute_metrics
+          depends_on:
+            - task_key: setup_collector_tables
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../sql/20_compute_metrics.sql
+            parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+              lob: "{{job.parameters.lob}}"
+              lookback_days: "{{job.parameters.lookback_days}}"
+              idle_cpu_threshold: "{{job.parameters.idle_cpu_threshold}}"

@@ -1,0 +1,87 @@
+# Deterministic rules & guardrails for the APC compute optimizer.
+# Every threshold the engine uses lives here; bump rule_version on change so
+# recommendations stay traceable to the rule set that produced them.
+rule_version: "1.0.0"
+
+global:
+  lookback_days: 30
+  active_window_days: 14          # runtime within this window => cluster is in use
+  min_observation_days: 7         # below this, no recommendation is emitted
+  min_uptime_minutes: 600         # 10h of telemetry minimum
+  min_annual_savings_usd: 500     # suppress noise recommendations
+  exclude_tag_key: apc_optimizer  # tag apc_optimizer=exclude opts a cluster out
+  exclude_tag_value: exclude
+
+rightsizing:
+  enabled: true
+  headroom_pct: 10                # required = current * P95 * (1 + headroom)
+  allowed_families: [m5, m5d, m6i, m6id, r5, r5d, r6i, r6id, c5, c5d, c6i, i3]
+  allow_family_change: true       # e.g. r5 -> m5 when memory is over-provisioned
+  max_downsize_ratio: 0.25        # never shrink a node below 25% of current vCPU in one step
+  min_cost_reduction_pct: 5
+  skip_gpu: true
+  driver:
+    min_vcpu: 4
+    min_memory_gb: 16
+  worker:
+    min_vcpu: 4
+    min_memory_gb: 16
+
+asg:                              # bundled with worker rightsizing
+  min_workers_floor: 1
+  max_workers_ceiling: 100
+  headroom_pct: 10
+
+photon:
+  enabled: true
+  cpu_p95_threshold: 30           # Photon off if worker (or driver) CPU P95 < 30
+  dbu_multiplier: 2.0             # Photon DBU rate / non-Photon DBU rate
+
+auto_stop:
+  enabled: true
+  candidate_minutes: [10, 15, 20, 30, 45, 60, 90, 120]
+  min_minutes: 10
+  max_minutes: 120
+  max_restart_rate: 0.20          # at most 20% of resumed idle gaps may cause a cold start
+  restart_penalty_minutes: 5      # cluster start time charged against savings per extra restart
+
+apc_to_job:
+  enabled: true
+  min_scheduled_runs: 8
+  min_scheduled_days: 4
+  min_scheduled_share: 0.60       # scheduled job minutes / active minutes
+  apc_dbu_rate: 0.55              # All-Purpose Compute $/DBU (list)
+  jobs_dbu_rate: 0.15             # Jobs Compute $/DBU (list)
+
+lifecycle:
+  max_config_changes: 6           # more changes than this in the window...
+  min_stable_days: 7              # ...and current config younger than this => EXPERIMENTAL
+  recurring_min_occurrences: 2    # a config seen in >=2 separate spans is "repeating"
+
+confidence:
+  weights:
+    coverage: 0.25
+    sample: 0.15
+    stability: 0.20
+    signal: 0.30
+    cost: 0.10
+  bands:
+    high: 75
+    medium: 50
+  full_coverage_days: 30
+  full_sample_uptime_minutes: 2400
+
+cost:
+  default_dbu_share: 0.50         # used when cost lake has no DBU/INFRA split
+  dbu_categories: [DBU, DATABRICKS, DATABRICKS_DBU]
+  infra_categories: [EC2, INFRA, AWS, CLOUD]
+  list_dbu_rate: 0.55             # only for LIST_PRICE_ESTIMATE fallback
+
+# Metadata-lake NET cost table (fully-qualified name is passed as --cost_table).
+# Map your lake's column names here; category_col may be null if the lake has
+# no DBU / infra split (the default_dbu_share is then used).
+cost_source:
+  compute_id_col: cluster_id
+  date_col: usage_date
+  net_cost_col: net_cost
+  category_col: cost_category

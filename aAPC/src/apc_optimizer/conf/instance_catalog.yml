@@ -1,0 +1,57 @@
+# AWS instance catalog used for rightsizing candidate selection.
+# price_per_hour: on-demand us-east-1 (approximate) - only RATIOS are used to
+#   scale the NET cost from the cost lake, so absolute accuracy is not critical.
+# dbu_per_hour: Databricks DBU emission rate for the node type.
+# Replace with your negotiated rates / region if they differ materially.
+instances:
+  # general purpose
+  m5.xlarge:    {vcpu: 4,  memory_gb: 16,  price_per_hour: 0.192, dbu_per_hour: 0.69}
+  m5.2xlarge:   {vcpu: 8,  memory_gb: 32,  price_per_hour: 0.384, dbu_per_hour: 1.37}
+  m5.4xlarge:   {vcpu: 16, memory_gb: 64,  price_per_hour: 0.768, dbu_per_hour: 2.74}
+  m5.8xlarge:   {vcpu: 32, memory_gb: 128, price_per_hour: 1.536, dbu_per_hour: 5.48}
+  m5.12xlarge:  {vcpu: 48, memory_gb: 192, price_per_hour: 2.304, dbu_per_hour: 8.22}
+  m5.16xlarge:  {vcpu: 64, memory_gb: 256, price_per_hour: 3.072, dbu_per_hour: 10.96}
+  m5d.xlarge:   {vcpu: 4,  memory_gb: 16,  price_per_hour: 0.226, dbu_per_hour: 0.69}
+  m5d.2xlarge:  {vcpu: 8,  memory_gb: 32,  price_per_hour: 0.452, dbu_per_hour: 1.37}
+  m5d.4xlarge:  {vcpu: 16, memory_gb: 64,  price_per_hour: 0.904, dbu_per_hour: 2.74}
+  m5d.8xlarge:  {vcpu: 32, memory_gb: 128, price_per_hour: 1.808, dbu_per_hour: 5.48}
+  m6i.xlarge:   {vcpu: 4,  memory_gb: 16,  price_per_hour: 0.192, dbu_per_hour: 0.69}
+  m6i.2xlarge:  {vcpu: 8,  memory_gb: 32,  price_per_hour: 0.384, dbu_per_hour: 1.37}
+  m6i.4xlarge:  {vcpu: 16, memory_gb: 64,  price_per_hour: 0.768, dbu_per_hour: 2.74}
+  m6i.8xlarge:  {vcpu: 32, memory_gb: 128, price_per_hour: 1.536, dbu_per_hour: 5.48}
+  m6i.16xlarge: {vcpu: 64, memory_gb: 256, price_per_hour: 3.072, dbu_per_hour: 10.96}
+  m6id.xlarge:  {vcpu: 4,  memory_gb: 16,  price_per_hour: 0.237, dbu_per_hour: 0.69}
+  m6id.2xlarge: {vcpu: 8,  memory_gb: 32,  price_per_hour: 0.475, dbu_per_hour: 1.37}
+  m6id.4xlarge: {vcpu: 16, memory_gb: 64,  price_per_hour: 0.949, dbu_per_hour: 2.74}
+  # memory optimised
+  r5.xlarge:    {vcpu: 4,  memory_gb: 32,  price_per_hour: 0.252, dbu_per_hour: 0.90}
+  r5.2xlarge:   {vcpu: 8,  memory_gb: 64,  price_per_hour: 0.504, dbu_per_hour: 1.80}
+  r5.4xlarge:   {vcpu: 16, memory_gb: 128, price_per_hour: 1.008, dbu_per_hour: 3.60}
+  r5.8xlarge:   {vcpu: 32, memory_gb: 256, price_per_hour: 2.016, dbu_per_hour: 7.20}
+  r5.12xlarge:  {vcpu: 48, memory_gb: 384, price_per_hour: 3.024, dbu_per_hour: 10.80}
+  r5.16xlarge:  {vcpu: 64, memory_gb: 512, price_per_hour: 4.032, dbu_per_hour: 14.40}
+  r5d.xlarge:   {vcpu: 4,  memory_gb: 32,  price_per_hour: 0.288, dbu_per_hour: 0.90}
+  r5d.2xlarge:  {vcpu: 8,  memory_gb: 64,  price_per_hour: 0.576, dbu_per_hour: 1.80}
+  r5d.4xlarge:  {vcpu: 16, memory_gb: 128, price_per_hour: 1.152, dbu_per_hour: 3.60}
+  r6i.xlarge:   {vcpu: 4,  memory_gb: 32,  price_per_hour: 0.252, dbu_per_hour: 0.90}
+  r6i.2xlarge:  {vcpu: 8,  memory_gb: 64,  price_per_hour: 0.504, dbu_per_hour: 1.80}
+  r6i.4xlarge:  {vcpu: 16, memory_gb: 128, price_per_hour: 1.008, dbu_per_hour: 3.60}
+  r6i.8xlarge:  {vcpu: 32, memory_gb: 256, price_per_hour: 2.016, dbu_per_hour: 7.20}
+  r6id.xlarge:  {vcpu: 4,  memory_gb: 32,  price_per_hour: 0.302, dbu_per_hour: 0.90}
+  r6id.2xlarge: {vcpu: 8,  memory_gb: 64,  price_per_hour: 0.605, dbu_per_hour: 1.80}
+  # compute optimised
+  c5.xlarge:    {vcpu: 4,  memory_gb: 8,   price_per_hour: 0.170, dbu_per_hour: 0.61}
+  c5.2xlarge:   {vcpu: 8,  memory_gb: 16,  price_per_hour: 0.340, dbu_per_hour: 1.22}
+  c5.4xlarge:   {vcpu: 16, memory_gb: 32,  price_per_hour: 0.680, dbu_per_hour: 2.43}
+  c5.9xlarge:   {vcpu: 36, memory_gb: 72,  price_per_hour: 1.530, dbu_per_hour: 5.47}
+  c5d.2xlarge:  {vcpu: 8,  memory_gb: 16,  price_per_hour: 0.384, dbu_per_hour: 1.22}
+  c5d.4xlarge:  {vcpu: 16, memory_gb: 32,  price_per_hour: 0.768, dbu_per_hour: 2.43}
+  c6i.xlarge:   {vcpu: 4,  memory_gb: 8,   price_per_hour: 0.170, dbu_per_hour: 0.61}
+  c6i.2xlarge:  {vcpu: 8,  memory_gb: 16,  price_per_hour: 0.340, dbu_per_hour: 1.22}
+  c6i.4xlarge:  {vcpu: 16, memory_gb: 32,  price_per_hour: 0.680, dbu_per_hour: 2.43}
+  c6i.8xlarge:  {vcpu: 32, memory_gb: 64,  price_per_hour: 1.360, dbu_per_hour: 4.86}
+  # storage optimised
+  i3.xlarge:    {vcpu: 4,  memory_gb: 30.5, price_per_hour: 0.312, dbu_per_hour: 1.00}
+  i3.2xlarge:   {vcpu: 8,  memory_gb: 61,   price_per_hour: 0.624, dbu_per_hour: 2.00}
+  i3.4xlarge:   {vcpu: 16, memory_gb: 122,  price_per_hour: 1.248, dbu_per_hour: 4.00}
+  i3.8xlarge:   {vcpu: 32, memory_gb: 244,  price_per_hour: 2.496, dbu_per_hour: 8.00}

@@ -1,0 +1,89 @@
+resources:
+  jobs:
+    apc_optimizer_pipeline:
+      name: "[${var.lob}] APC compute optimizer"
+      description: >
+        Collects non-billing compute metrics for All-Purpose Clusters from system
+        tables (SQL), then generates deterministic optimization recommendations
+        with annual cost, savings and confidence (Python wheel).
+      tags:
+        app: apc_compute_optimizer
+        lob: ${var.lob}
+      schedule:
+        quartz_cron_expression: "0 0 5 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+      max_concurrent_runs: 1
+
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: lob
+          default: ${var.lob}
+        - name: lookback_days
+          default: ${var.lookback_days}
+        - name: history_days
+          default: ${var.history_days}
+        - name: idle_cpu_threshold
+          default: ${var.idle_cpu_threshold}
+        - name: cost_table
+          default: ${var.cost_table}
+
+      job_clusters:
+        - job_cluster_key: engine
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: ${var.engine_node_type}
+            num_workers: 0
+            data_security_mode: SINGLE_USER
+            spark_conf:
+              spark.master: "local[*, 4]"
+              spark.databricks.cluster.profile: singleNode
+            custom_tags:
+              ResourceClass: SingleNode
+              app: apc_compute_optimizer
+
+      tasks:
+        # ---- 1. SQL collector (non-billing compute metrics) -------------------
+        # Defined in collector/ so it can be lifted out and deployed on its own.
+        - task_key: run_metrics_collector
+          run_job_task:
+            job_id: ${resources.jobs.apc_metrics_collector.id}
+            job_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+              lob: "{{job.parameters.lob}}"
+              lookback_days: "{{job.parameters.lookback_days}}"
+              history_days: "{{job.parameters.history_days}}"
+              idle_cpu_threshold: "{{job.parameters.idle_cpu_threshold}}"
+
+        - task_key: setup_engine_tables
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../collector/sql/90_setup_engine_tables.sql
+            parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+
+        # ---- 2. Recommendation engine -----------------------------------------
+        - task_key: generate_recommendations
+          depends_on:
+            - task_key: run_metrics_collector
+            - task_key: setup_engine_tables
+          job_cluster_key: engine
+          python_wheel_task:
+            package_name: apc_optimizer
+            entry_point: apc-recommend
+            named_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              schema: "{{job.parameters.schema}}"
+              lob: "{{job.parameters.lob}}"
+              lookback_days: "{{job.parameters.lookback_days}}"
+              history_days: "{{job.parameters.history_days}}"
+              cost_table: "{{job.parameters.cost_table}}"
+              compute_type: APC
+          libraries:
+            - whl: ../dist/*.whl
