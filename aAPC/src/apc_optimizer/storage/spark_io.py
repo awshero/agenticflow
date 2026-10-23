@@ -8,7 +8,7 @@ from apc_optimizer.compute_types import ComputeAdapter
 from apc_optimizer.config import EngineConfig
 from apc_optimizer.models import ClusterMetrics, ConfigSnapshot, CostRecord
 
-# Column order must match collector/sql/apc/00_setup.sql.
+# Column order must match collector/sql/90_setup_engine_tables.sql.
 RECOMMENDATION_SCHEMA = """
   recommendation_id STRING, run_id STRING, generated_at TIMESTAMP, snapshot_date DATE,
   lob STRING, workspace_id STRING, compute_type STRING, compute_id STRING,

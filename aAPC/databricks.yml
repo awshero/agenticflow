@@ -12,6 +12,7 @@ bundle:
 
 include:
   - resources/*.yml
+  - collector/resources/*.yml     # the standalone collector job, triggered by the pipeline
 
 artifacts:
   apc_optimizer_wheel:
@@ -48,6 +49,11 @@ variables:
     default: m5.xlarge
   schedule_pause_status:
     description: PAUSED in dev and test, UNPAUSED in prod.
+    default: PAUSED
+  collector_schedule_pause_status:
+    description: >
+      The collector's own schedule. Kept PAUSED here because the full pipeline
+      triggers the collector itself; only the standalone collector bundle unpauses it.
     default: PAUSED
 
 targets:

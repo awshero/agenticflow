@@ -39,7 +39,9 @@ Asset Bundle you can lift into any customer account (LOB1, LOB2, LOB3, …).
  └──────────────────────────────┘
 ```
 
-Both stages run as one job (`apc_optimizer_pipeline`), daily at 05:00 UTC.
+The full pipeline (`apc_optimizer_pipeline`, daily at 05:00 UTC) triggers the collector job
+(`apc_metrics_collector`), then runs the engine. The collector is a self-contained folder that
+can also be deployed and run on its own (see `collector/README.md`).
 
 ---
 
@@ -49,14 +51,17 @@ Both stages run as one job (`apc_optimizer_pipeline`), daily at 05:00 UTC.
 aAPC/
 ├── databricks.yml                     # DAB: variables + targets dev / test / prod (LOB is a variable)
 ├── resources/
-│   └── apc_optimizer.job.yml          # collector SQL tasks -> engine wheel task
-├── collector/
+│   └── apc_optimizer.job.yml          # pipeline: run collector job -> engine wheel task
+├── collector/                         # STANDALONE: all SQL lives here; copy this folder and run it alone
+│   ├── databricks.yml                 # collector-only bundle (dev / test / prod)
+│   ├── resources/
+│   │   └── apc_metrics_collector.job.yml
+│   ├── README.md
 │   └── sql/
-│       ├── apc/
-│       │   ├── 00_setup.sql           # schema + all Delta tables + latest view
-│       │   ├── 10_config_history.sql  # config change history  -> apc_cluster_config_history
-│       │   └── 20_compute_metrics.sql # P50/P95, executors, idle gaps, schedules -> apc_metrics_table
-│       └── job_cluster/               # future: same pattern for job clusters
+│       ├── 00_setup_collector_tables.sql  # schema + apc_metrics_table + apc_cluster_config_history
+│       ├── 10_config_history.sql          # config change history -> apc_cluster_config_history
+│       ├── 20_compute_metrics.sql         # P50/P95, executors, idle gaps, schedules -> apc_metrics_table
+│       └── 90_setup_engine_tables.sql     # engine output tables + latest view (run by the pipeline only)
 ├── src/apc_optimizer/
 │   ├── conf/
 │   │   ├── rules.yml                  # every threshold / guardrail (versioned)
@@ -92,15 +97,15 @@ aAPC/
   APC-only by nature.
 * The engine (`generator.py`), cost and confidence models don't know which
   compute type they are processing.
-* Add `collector/sql/job_cluster/*.sql`, register the tasks, and run the engine
-  with `--compute_type JOB_CLUSTER` (see `collector/sql/job_cluster/README.md`).
+* Add job-cluster SQL files to `collector/sql/`, register the tasks, and run the
+  engine with `--compute_type JOB_CLUSTER` (see `collector/README.md`).
 
 ---
 
 ## Components
 
 ### 1. SQL metrics collector (non-billing)
-Runs on a SQL warehouse as SQL file tasks with named parameters
+Self-contained in `collector/`, with its own bundle, job and README. It runs on a SQL warehouse as SQL file tasks with named parameters
 (`:catalog`, `:schema`, `:lob`, `:lookback_days`, `:idle_cpu_threshold`).
 Idempotent `MERGE` keyed on `(snapshot_date, workspace_id, cluster_id)`, so a
 rerun on the same day overwrites rather than duplicates.

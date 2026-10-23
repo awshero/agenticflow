@@ -1,5 +1,5 @@
 -- =============================================================================
--- APC Compute Optimizer :: 20_compute_metrics.sql
+-- APC Metrics Collector :: 20_compute_metrics.sql
 -- Non-billing compute metrics collector for All-Purpose Clusters.
 --
 -- Sources (system tables only, no $ values):

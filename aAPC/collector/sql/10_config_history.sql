@@ -1,5 +1,5 @@
 -- =============================================================================
--- APC Compute Optimizer :: 10_config_history.sql
+-- APC Metrics Collector :: 10_config_history.sql
 -- Captures the configuration-change history of All-Purpose Clusters from
 -- system.compute.clusters (one row per change) for Lifecycle_APC.
 -- Parameters: :catalog, :schema, :lob, :history_days
