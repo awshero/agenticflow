@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apc_optimizer"
+version = "1.0.0"
+description = "Deterministic Databricks All-Purpose Cluster compute optimization engine"
+requires-python = ">=3.9"
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "build>=1.0"]
+
+[project.scripts]
+apc-recommend = "apc_optimizer.jobs.recommend:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"apc_optimizer.conf" = ["*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --cov=apc_optimizer --cov-report=term-missing --cov-fail-under=85"
+
+[tool.coverage.run]
+# Spark I/O and the job entry point are exercised on Databricks, not in unit tests.
+omit = ["*/apc_optimizer/storage/spark_io.py", "*/apc_optimizer/jobs/recommend.py"]

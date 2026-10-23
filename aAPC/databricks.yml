@@ -1,0 +1,87 @@
+# Databricks Asset Bundle for the APC Compute Optimizer.
+#
+# One bundle, many customer workspaces: each LOB is a target. Lift the aAPC/
+# folder into any repo / CI runner and run:
+#
+#   databricks bundle deploy -t lob1
+#   databricks bundle run apc_optimizer_pipeline -t lob1
+#
+bundle:
+  name: apc_compute_optimizer
+
+include:
+  - resources/*.yml
+
+artifacts:
+  apc_optimizer_wheel:
+    type: whl
+    path: .
+    build: python3 -m build --wheel
+
+variables:
+  lob:
+    description: Line of business this deployment reports for (written to every row).
+    default: dev
+  catalog:
+    description: Unity Catalog catalog that holds the optimizer tables.
+    default: finops
+  schema:
+    description: Schema that holds apc_metrics_table / apc_recommendations.
+    default: apc_optimizer
+  warehouse_id:
+    description: SQL warehouse that runs the SQL-based metrics collector.
+  cost_table:
+    description: Fully-qualified metadata-lake table holding NET cost per cluster per day.
+    default: finops.cost_lake.databricks_net_cost
+  lookback_days:
+    description: Telemetry window used by both collector and engine.
+    default: "30"
+  history_days:
+    description: How far back cluster configuration history is captured (lifecycle).
+    default: "180"
+  idle_cpu_threshold:
+    description: A cluster-minute whose max node CPU% is below this is "idle".
+    default: "10"
+  engine_node_type:
+    description: Node type for the single-node engine job cluster.
+    default: m5.xlarge
+  schedule_pause_status:
+    description: PAUSED in dev, UNPAUSED in customer targets.
+    default: PAUSED
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dev-workspace.cloud.databricks.com
+
+  lob1:
+    mode: production
+    workspace:
+      host: https://lob1-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      lob: LOB1
+      catalog: lob1_finops
+      schedule_pause_status: UNPAUSED
+
+  lob2:
+    mode: production
+    workspace:
+      host: https://lob2-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      lob: LOB2
+      catalog: lob2_finops
+      schedule_pause_status: UNPAUSED
+
+  lob3:
+    mode: production
+    workspace:
+      host: https://lob3-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      lob: LOB3
+      catalog: lob3_finops
+      schedule_pause_status: UNPAUSED
