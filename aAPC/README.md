@@ -47,7 +47,7 @@ Both stages run as one job (`apc_optimizer_pipeline`), daily at 05:00 UTC.
 
 ```
 aAPC/
-├── databricks.yml                     # DAB: variables + one target per LOB/customer
+├── databricks.yml                     # DAB: variables + targets dev / test / prod (LOB is a variable)
 ├── resources/
 │   └── apc_optimizer.job.yml          # collector SQL tasks -> engine wheel task
 ├── collector/
@@ -166,15 +166,19 @@ Prerequisites: Databricks CLI ≥ 0.218, Unity Catalog with access to `system.co
 `system.lakeflow` and `system.billing`, a SQL warehouse, and read access to the
 cost-lake table.
 
-1. Set each target's `workspace.host` and `catalog` in `databricks.yml`.
+1. Set the `workspace.host` and `catalog` of the dev / test / prod targets in
+   `databricks.yml`. The schedule is paused in dev and test, live in prod.
+   The LOB is passed per deploy (`--var="lob=LOB1"`); in prod and test each LOB
+   gets its own bundle root, so deployments for different LOBs don't overwrite each other.
 2. Map your cost-lake columns in `src/apc_optimizer/conf/rules.yml → cost_source`.
 3. Deploy and run:
 
 ```bash
 pip install build
-databricks bundle validate -t lob1 --var="warehouse_id=<id>"
-databricks bundle deploy   -t lob1 --var="warehouse_id=<id>" --var="cost_table=<cat.schema.table>"
-databricks bundle run apc_optimizer_pipeline -t lob1
+databricks bundle validate -t dev  --var="lob=LOB1" --var="warehouse_id=<id>"
+databricks bundle deploy   -t test --var="lob=LOB1" --var="warehouse_id=<id>" --var="cost_table=<cat.schema.table>"
+databricks bundle run apc_optimizer_pipeline -t test --var="lob=LOB1"
+databricks bundle deploy   -t prod --var="lob=LOB1" --var="warehouse_id=<id>" --var="cost_table=<cat.schema.table>"
 ```
 
 Query the output:

@@ -1,10 +1,11 @@
 # Databricks Asset Bundle for the APC Compute Optimizer.
 #
-# One bundle, many customer workspaces: each LOB is a target. Lift the aAPC/
-# folder into any repo / CI runner and run:
+# One bundle, three environments (dev / test / prod). The LOB (LOB1, LOB2,
+# LOB3, ...) is a variable, so lift the aAPC/ folder into any repo / CI runner
+# and run:
 #
-#   databricks bundle deploy -t lob1
-#   databricks bundle run apc_optimizer_pipeline -t lob1
+#   databricks bundle deploy -t prod --var="lob=LOB1" --var="warehouse_id=<id>"
+#   databricks bundle run apc_optimizer_pipeline -t prod --var="lob=LOB1"
 #
 bundle:
   name: apc_compute_optimizer
@@ -46,42 +47,34 @@ variables:
     description: Node type for the single-node engine job cluster.
     default: m5.xlarge
   schedule_pause_status:
-    description: PAUSED in dev, UNPAUSED in customer targets.
+    description: PAUSED in dev and test, UNPAUSED in prod.
     default: PAUSED
 
 targets:
+  # One target per environment. LOB is a deploy-time variable, so the same
+  # target is reused for every LOB / customer workspace:
+  #   databricks bundle deploy -t prod --var="lob=LOB1" --var="warehouse_id=..."
   dev:
     mode: development
     default: true
     workspace:
       host: https://dev-workspace.cloud.databricks.com
+    variables:
+      catalog: dev_finops
 
-  lob1:
+  test:
     mode: production
     workspace:
-      host: https://lob1-workspace.cloud.databricks.com
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+      host: https://test-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}/${var.lob}
     variables:
-      lob: LOB1
-      catalog: lob1_finops
-      schedule_pause_status: UNPAUSED
+      catalog: test_finops
 
-  lob2:
+  prod:
     mode: production
     workspace:
-      host: https://lob2-workspace.cloud.databricks.com
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+      host: https://prod-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}/${var.lob}
     variables:
-      lob: LOB2
-      catalog: lob2_finops
-      schedule_pause_status: UNPAUSED
-
-  lob3:
-    mode: production
-    workspace:
-      host: https://lob3-workspace.cloud.databricks.com
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
-    variables:
-      lob: LOB3
-      catalog: lob3_finops
+      catalog: prod_finops
       schedule_pause_status: UNPAUSED
